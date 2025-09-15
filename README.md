@@ -27,7 +27,7 @@ It correlates multiple data sources (WHOIS, DNS, message metadata) and applies s
 From a local clone:
 
 ```
-git clone https://your.repo/abusedetector.git
+git clone https://github.com/ochronus/abusedetector.git
 cd abusedetector
 cargo build --release
 ```
@@ -92,31 +92,31 @@ abusedetector --batch 46.4.15.45
 
 ## How It Works (Pipeline Overview)
 
-1. Input Resolution  
+1. Input Resolution
    - Direct IP or extracted from `.eml` headers (priority order: specialized provider headers like `X-Mailgun-Sending-Ip`, “spam” source headers, Authentication-Results remote IP markers, SPF client IP, fallback to Received chain chronology & provider heuristics).
 
-2. Sanity Filtering  
+2. Sanity Filtering
    - Rejects private (RFC1918) and broadly reserved / special-use ranges.
 
-3. Reverse DNS (PTR)  
+3. Reverse DNS (PTR)
    - Obtains candidate hostname; can guide guesses or domain scoping.
 
-4. SOA Discovery  
+4. SOA Discovery
    - Walks parent domains and reverse in-addr.arpa labels; converts SOA RNAME into an email (first dot becomes @).
 
-5. WHOIS Traversal  
+5. WHOIS Traversal
    - Starts at ARIN; follows referrals; extracts plausible abuse / hostmaster / security emails via pattern scanning.
 
-6. abuse.net (optional)  
+6. abuse.net (optional)
    - Queries domain directory service for curated abuse contacts.
 
-7. Normalization & Heuristics  
-   - Lowercases, strips trailing dots, deduplicates.  
-   - Filters out registry / infrastructure addresses (`ripe.net`, `iana.org`, etc.).  
-   - If any `abuse@` addresses exist, restricts output to those.  
+7. Normalization & Heuristics
+   - Lowercases, strips trailing dots, deduplicates.
+   - Filters out registry / infrastructure addresses (`ripe.net`, `iana.org`, etc.).
+   - If any `abuse@` addresses exist, restricts output to those.
    - In non-verbose non-batch mode, typically returns the most relevant single address.
 
-8. Output  
+8. Output
    - Human-friendly default vs. machine‑parsable batch mode.
 
 ---

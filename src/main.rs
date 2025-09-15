@@ -163,14 +163,12 @@ async fn traverse_soa(base: &str, emails: &mut EmailSet, cli: &Cli) -> Result<()
         )
         .await
         {
-            if let Some(rdata) = answer.iter().next() {
-                if let trust_dns_resolver::proto::rr::RData::SOA(soa) = rdata {
-                    let rname = soa.rname().to_utf8();
-                    if let Some(email) = soa_rname_to_email(rname.trim_end_matches('.')) {
-                        emails.add_with_conf(&email, 1);
-                        if cli.is_trace() {
-                            eprintln!("  SOA rname => {email}");
-                        }
+            if let Some(trust_dns_resolver::proto::rr::RData::SOA(soa)) = answer.iter().next() {
+                let rname = soa.rname().to_utf8();
+                if let Some(email) = soa_rname_to_email(rname.trim_end_matches('.')) {
+                    emails.add_with_conf(&email, 1);
+                    if cli.is_trace() {
+                        eprintln!("  SOA rname => {email}");
                     }
                 }
             }

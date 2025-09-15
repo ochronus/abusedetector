@@ -206,7 +206,8 @@ mod tests {
     async fn test_whois_chain_handles_unreachable() {
         let mut emails = EmailSet::new();
         let fake_cli = Cli {
-            ip: "198.51.100.10".into(),
+            ip: Some("198.51.100.10".into()),
+            eml: None,
             verbose: 0,
             no_use_hostname: true,
             no_use_abusenet: true,

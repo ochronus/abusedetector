@@ -4,7 +4,6 @@ use std::collections::HashMap;
 
 /// Container for discovered abuse-related email addresses with a simple
 /// confidence counter (larger value means "more evidence").
-////
 /// This module encapsulates ranking, normalization and filtering behavior
 /// so main logic stays readable.
 #[derive(Default, Debug, Clone)]
@@ -39,9 +38,8 @@ impl EmailSet {
         *entry = entry.saturating_add(delta);
     }
 
-    /// Merge another EmailSet (sums confidence, saturating on u32::MAX).
+    // Merge another EmailSet (sums confidence, saturating on u32::MAX).
     // absorb removed (was unused)
-
     /// Strip trailing '.' (common artefact when parsing some whois / DNS outputs)
     /// and merge duplicates post-normalization.
     pub fn normalize(&mut self) {
@@ -152,9 +150,8 @@ fn canonical(s: &str) -> String {
     s.trim().to_ascii_lowercase()
 }
 
-/// Extract domain component of an email (after the '@').
+// Extract domain component of an email (after the '@').
 // email_domain removed (unused)
-
 /// Transform an SOA RNAME into an email (replace first '.' with '@').
 pub fn soa_rname_to_email(rname: &str) -> Option<String> {
     if let Some(pos) = rname.find('.') {

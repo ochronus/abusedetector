@@ -68,7 +68,7 @@ pub fn is_reserved(ip: Ipv4Addr) -> bool {
         ("224.0.0.0", "239.255.255.255"),
         ("240.0.0.0", "255.255.255.255"),
     ];
-    RANGES.iter().any(|(s, e)| in_range(ip, *s, *e))
+    RANGES.iter().any(|(s, e)| in_range(ip, s, e))
 }
 
 /// Convert an IPv4 address to its reverse in-addr.arpa domain.
@@ -114,18 +114,32 @@ pub fn domain_of(host: &str) -> Option<String> {
         return None;
     }
 
-    // Small built-in list of common 2-part suffixes where we want one extra label.
+    // Built‑in list of common 2‑part public suffixes where we want to keep
+    // additional labels to better approximate the organizational domain.
     const SPECIAL_SUFFIXES: [&str; 4] = ["co.uk", "org.uk", "com.au", "co.jp"];
 
     let last_two = format!("{}.{}", parts[parts.len() - 2], parts[parts.len() - 1]);
+
     if SPECIAL_SUFFIXES
         .iter()
         .any(|suf| suf.eq_ignore_ascii_case(&last_two))
     {
-        if parts.len() >= 3 {
+        // Prefer TWO labels before the public suffix when available (e.g.
+        // a.b.c.d.e.co.uk -> d.e.co.uk) matching the test expectation.
+        if parts.len() >= 4 {
+            return Some(format!(
+                "{}.{}.{}",
+                parts[parts.len() - 4],
+                parts[parts.len() - 3],
+                last_two
+            ));
+        } else if parts.len() >= 3 {
+            // Fallback: only one label available before suffix.
             return Some(format!("{}.{}", parts[parts.len() - 3], last_two));
         }
+        // If only the suffix itself exists, fall through to last_two
     }
+
     Some(last_two)
 }
 

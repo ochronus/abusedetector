@@ -1,0 +1,52 @@
+version: 2
+updates:
+  # Keep Rust dependencies (Cargo.toml / Cargo.lock) up to date
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "daily"
+      time: "03:15"
+      timezone: "UTC"
+    open-pull-requests-limit: 10
+    labels:
+      - "deps"
+      - "rust"
+    assignees:
+      - "ochronus"
+    commit-message:
+      prefix: "deps(cargo)"
+      include: "scope"
+    # Group low-risk dependency bumps together (optional tweak)
+    groups:
+      minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Keep GitHub Actions up to date
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "daily"
+      time: "03:30"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    labels:
+      - "deps"
+      - "ci"
+    assignees:
+      - "ochronus"
+    commit-message:
+      prefix: "deps(actions)"
+      include: "scope"
+
+# Optional: enable security updates only (commented out example)
+#  - package-ecosystem: "cargo"
+#    directory: "/"
+#    schedule:
+#      interval: "daily"
+#    allow:
+#      - dependency-type: "direct"
+#    insecure-external-code-execution: "deny"
