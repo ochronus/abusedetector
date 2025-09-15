@@ -1,5 +1,8 @@
 # abusedetector
 
+> NOTE: Coverage reporting section added below (see "Coverage" heading).
+
+
 A fast, privacy‑respecting command‑line tool to discover the most appropriate abuse / security reporting email address for a given IPv4 address or for the originating sender of an email message (`.eml` file).
 
 It correlates multiple data sources (WHOIS, DNS, message metadata) and applies sensible heuristics to prefer provider / network abuse contacts over generic or registry addresses.
@@ -230,6 +233,52 @@ done < ip_list.txt
 2. Write focused commits; add tests where possible (unit tests already exist for parsing layers).
 3. Run `cargo fmt && cargo clippy -- -D warnings` before submitting (add clippy config if you enforce).
 4. Open a PR with context and reproduction steps if fixing a parsing discrepancy.
+
+---
+
+## Coverage
+
+The project includes an automated coverage job in the CI workflow using `cargo-tarpaulin`.  
+Artifacts produced:
+- `lcov.info` (LCOV format)
+- `cobertura.xml` (Cobertura XML)
+
+### View locally (Linux recommended)
+
+```
+cargo install cargo-tarpaulin --locked
+cargo tarpaulin --timeout 120 --out Html --out Lcov --workspace
+# HTML report (if Html selected) in ./tarpaulin-report
+# LCOV file: lcov.info
+```
+
+(Using `--out Html` locally is optional; CI omits it to keep artifacts minimal.)
+
+If you are on macOS:
+Tarpaulin relies on ptrace-like facilities and works best on Linux. For macOS you can:
+1. Use a Linux container:  
+   `docker run --rm -v "$PWD":/work -w /work rust:latest bash -lc "cargo install cargo-tarpaulin --locked && cargo tarpaulin --timeout 120 --out Lcov"`
+2. Or consider alternative coverage tools (e.g. `grcov` with `llvm-cov`) if deeper cross-platform coverage is needed.
+
+### Interpreting results
+
+The current test suite emphasizes:
+- Parsing logic (SOA, domain heuristics, .eml extraction)
+- Normalization & filtering
+- WHOIS timeout/error handling
+
+Network-dependent logic is intentionally limited in tests to keep runs deterministic.  
+Adding more unit tests for heuristic branches will immediately raise reported line/branch coverage.
+
+### Adding new coverage gates
+
+You can optionally fail the build for low coverage by adding a script step in CI:
+
+```
+cargo tarpaulin --out Xml --fail-under 70
+```
+
+Adjust the percentage as the suite matures.
 
 ---
 

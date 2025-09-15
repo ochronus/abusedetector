@@ -1,1 +1,7 @@
 /target
+# Coverage artifacts
+lcov.info
+cobertura.xml
+tarpaulin-report/
+target/tarpaulin/
+*.profraw
