@@ -332,9 +332,9 @@ impl ContactSource for DnsSoaSource {
                     Duration::from_secs(dns_timeout),
                     resolver.lookup(
                         Name::from_ascii(&query_name).map_err(|e| {
-                            AbuseDetectorError::Configuration(format!(
-                                "Invalid domain name {query_name}: {e}"
-                            ))
+                            AbuseDetectorError::Configuration {
+                                message: format!("Invalid domain name {query_name}: {e}"),
+                            }
                         })?,
                         RecordType::SOA,
                     ),

@@ -487,9 +487,12 @@ impl App {
         };
 
         let formatter = crate::output::create_formatter(&output_format);
-        let plain = formatter.format_results(&results).map_err(|e| {
-            AbuseDetectorError::Configuration(format!("Output formatting failed: {e}"))
-        })?;
+        let plain =
+            formatter
+                .format_results(&results)
+                .map_err(|e| AbuseDetectorError::Configuration {
+                    message: format!("Output formatting failed: {e}"),
+                })?;
         print!("{plain}");
 
         // Provide separate escalation path listing if requested but plain output mode
@@ -847,8 +850,8 @@ async fn traverse_soa(
         match tokio::time::timeout(
             Duration::from_secs(5),
             resolver.lookup(
-                Name::from_ascii(&candidate).map_err(|e| {
-                    AbuseDetectorError::Configuration(format!("Invalid domain name: {e}"))
+                Name::from_ascii(&candidate).map_err(|e| AbuseDetectorError::Configuration {
+                    message: format!("Invalid domain name: {e}"),
                 })?,
                 RecordType::SOA,
             ),

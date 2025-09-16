@@ -1,334 +1,366 @@
-//! Custom error types for abusedetector.
+//! Unified error handling (Improvement Plan – Section 2)
 //!
-//! This module provides structured error handling to improve user experience
-//! and debugging capabilities. Instead of using generic anyhow errors everywhere,
-//! we define specific error types for different failure modes.
+//! This module refactors the previous ad‑hoc / manual error enum into a
+//! `thiserror`-based model with:
+//!   * Typed variants for common failure domains
+//!   * A categorization layer (`ErrorCategory`) for analytics & reporting
+//!   * Helper constructors
+//!   * `From` conversions for common lower-level errors
+//!   * Timeout + WHOIS unavailability distinctions
+//!
+//! Design goals:
+//!   * Keep end-user messages clear & actionable
+//!   * Avoid leaking internal implementation details
+//!   * Enable structured output to classify errors deterministically
+//!
+//! Usage:
+//!   use abusedetector::errors::{Result, AbuseDetectorError, ErrorCategory};
+//!
+//!   fn do_something() -> Result<()> {
+//!       Err(AbuseDetectorError::Configuration { message: "invalid mode".into() })
+//!   }
+//!
+//! Categories are intentionally coarse to support metrics dashboards:
+//!   - Input: User / data validation issues
+//!   - Network: Transient or remote-service problems
+//!   - Parse: Syntax / data-format decoding issues
+//!   - Internal: Logic bugs or unexpected states
+//!
+//! NOTE: Variants that wrap external errors retain sources to preserve backtraces
+//!       (when RUST_BACKTRACE=1).
+//!
+//! Future extensions:
+//!   * Attach retry hints
+//!   * Map categories to exit codes
+//!   * Serialize into structured output (JSON schema)
+//!
 
-#![allow(dead_code)]
-
-use std::fmt;
 use std::io;
 use std::net::AddrParseError;
 
-/// Main error type for abusedetector operations.
-#[derive(Debug)]
+use thiserror::Error;
+
+/// High-level classification for metrics / structured reporting.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ErrorCategory {
+    Input,
+    Network,
+    Parse,
+    Internal,
+}
+
+impl std::fmt::Display for ErrorCategory {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            ErrorCategory::Input => "input",
+            ErrorCategory::Network => "network",
+            ErrorCategory::Parse => "parse",
+            ErrorCategory::Internal => "internal",
+        };
+        f.write_str(s)
+    }
+}
+
+/// Primary application error type.
+#[derive(Error, Debug)]
 pub enum AbuseDetectorError {
-    /// Invalid IP address format
-    InvalidIpAddress(String),
+    // ------------------------ Input / Validation ----------------------------
+    #[error("Invalid IP address format: {ip}")]
+    InvalidIpAddress { ip: String },
 
-    /// IP address is in a private range (RFC 1918)
-    PrivateIpAddress(String),
+    #[error("{ip} is a private (RFC1918) IP address")]
+    PrivateIpAddress { ip: String },
 
-    /// IP address is in a reserved range
-    ReservedIpAddress(String),
+    #[error("{ip} is a reserved IP address")]
+    ReservedIpAddress { ip: String },
 
-    /// Failed to read or parse EML file
+    #[error("No public IPv4 addresses found in EML file: {file_path}")]
+    NoPublicIpInEml { file_path: String },
+
+    #[error("Failed to extract sender domain from EML file {file_path}: {reason}")]
+    DomainExtractionFailed { file_path: String, reason: String },
+
+    #[error("Unsupported or unknown content encoding: {details}")]
+    UnsupportedContentEncoding { details: String },
+
+    #[error("No abuse contacts discovered for target: {target}")]
+    NoAbuseContacts { target: String },
+
+    #[error("Configuration error: {message}")]
+    Configuration { message: String },
+
+    // ---------------------------- Parsing -----------------------------------
+    #[error("Failed to parse EML file {file_path}: {reason}")]
     EmlParsing { file_path: String, reason: String },
 
-    /// No public IP addresses found in EML file
-    NoPublicIpInEml(String),
+    #[error("WHOIS response parse failed for query '{query}': {reason}")]
+    WhoisParse { query: String, reason: String },
 
-    /// Network operation failed (DNS, WHOIS, etc.)
-    NetworkError {
+    // ----------------------------- Network ----------------------------------
+    #[error("Network error during {operation} for '{target}': {source}")]
+    Network {
         operation: String,
         target: String,
+        #[source]
         source: Box<dyn std::error::Error + Send + Sync>,
     },
 
-    /// Network operation timed out
-    NetworkTimeout {
-        operation: String,
-        target: String,
-        timeout_secs: u64,
-    },
+    #[error("DNS query timed out after {seconds}s: {query}")]
+    DnsTimeout { query: String, seconds: u64 },
 
-    /// DNS resolution failed
+    #[error("DNS {record_type} lookup failed for {domain}: {reason}")]
     DnsResolution {
         domain: String,
         record_type: String,
         reason: String,
     },
 
-    /// WHOIS query failed
+    #[error("WHOIS query '{query}' to server '{server}' failed: {reason}")]
     WhoisQuery {
         server: String,
         query: String,
         reason: String,
     },
 
-    /// File I/O error
-    IoError {
-        file_path: String,
+    #[error("WHOIS service unavailable for '{query}': {reason}")]
+    WhoisUnavailable { query: String, reason: String },
+
+    // ----------------------------- I/O / FS ---------------------------------
+    #[error("I/O error during {operation} on {path}: {source}")]
+    Io {
+        path: String,
         operation: String,
+        #[source]
         source: io::Error,
     },
 
-    /// Configuration error
-    Configuration(String),
-
-    /// No abuse contacts could be discovered
-    NoAbuseContacts(String),
+    // ---------------------------- Internal ----------------------------------
+    #[error("Internal error: {message}")]
+    Internal {
+        message: String,
+        #[source]
+        source: Option<Box<dyn std::error::Error + Send + Sync>>,
+    },
 }
 
-impl fmt::Display for AbuseDetectorError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl AbuseDetectorError {
+    /// Categorize the error for structured output / metrics.
+    pub fn category(&self) -> ErrorCategory {
+        use AbuseDetectorError::*;
         match self {
-            AbuseDetectorError::InvalidIpAddress(ip) => {
-                write!(f, "Invalid IP address format: '{}'", ip)
-            }
-            AbuseDetectorError::PrivateIpAddress(ip) => {
-                write!(
-                    f,
-                    "{} is a private IP address (RFC 1918). Cannot proceed with abuse lookup",
-                    ip
-                )
-            }
-            AbuseDetectorError::ReservedIpAddress(ip) => {
-                write!(
-                    f,
-                    "{} is a reserved IP address. Cannot proceed with abuse lookup",
-                    ip
-                )
-            }
-            AbuseDetectorError::EmlParsing { file_path, reason } => {
-                write!(f, "Failed to parse EML file '{}': {}", file_path, reason)
-            }
-            AbuseDetectorError::NoPublicIpInEml(file_path) => {
-                write!(
-                    f,
-                    "No public IPv4 addresses found in EML file '{}'",
-                    file_path
-                )
-            }
-            AbuseDetectorError::NetworkError {
-                operation,
-                target,
-                source,
-            } => {
-                write!(
-                    f,
-                    "Network error during {} for '{}': {}",
-                    operation, target, source
-                )
-            }
-            AbuseDetectorError::NetworkTimeout {
-                operation,
-                target,
-                timeout_secs,
-            } => {
-                write!(
-                    f,
-                    "{} timed out after {} seconds for '{}'",
-                    operation, timeout_secs, target
-                )
-            }
-            AbuseDetectorError::DnsResolution {
-                domain,
-                record_type,
-                reason,
-            } => {
-                write!(
-                    f,
-                    "DNS {} lookup failed for '{}': {}",
-                    record_type, domain, reason
-                )
-            }
-            AbuseDetectorError::WhoisQuery {
-                server,
-                query,
-                reason,
-            } => {
-                write!(
-                    f,
-                    "WHOIS query to '{}' for '{}' failed: {}",
-                    server, query, reason
-                )
-            }
-            AbuseDetectorError::IoError {
-                file_path,
-                operation,
-                source,
-            } => {
-                write!(
-                    f,
-                    "I/O error during {} on '{}': {}",
-                    operation, file_path, source
-                )
-            }
-            AbuseDetectorError::Configuration(msg) => {
-                write!(f, "Configuration error: {}", msg)
-            }
-            AbuseDetectorError::NoAbuseContacts(ip) => {
-                write!(f, "No abuse contacts discovered for {}", ip)
-            }
+            InvalidIpAddress { .. }
+            | PrivateIpAddress { .. }
+            | ReservedIpAddress { .. }
+            | NoPublicIpInEml { .. }
+            | DomainExtractionFailed { .. }
+            | UnsupportedContentEncoding { .. }
+            | NoAbuseContacts { .. }
+            | Configuration { .. } => ErrorCategory::Input,
+
+            EmlParsing { .. } | WhoisParse { .. } => ErrorCategory::Parse,
+
+            Network { .. }
+            | DnsTimeout { .. }
+            | DnsResolution { .. }
+            | WhoisQuery { .. }
+            | WhoisUnavailable { .. } => ErrorCategory::Network,
+
+            Io { .. } | Internal { .. } => ErrorCategory::Internal,
+        }
+    }
+
+    // ---------------------------- Constructors -----------------------------
+
+    pub fn invalid_ip(ip: impl Into<String>) -> Self {
+        Self::InvalidIpAddress { ip: ip.into() }
+    }
+
+    pub fn private_ip(ip: impl Into<String>) -> Self {
+        Self::PrivateIpAddress { ip: ip.into() }
+    }
+
+    pub fn reserved_ip(ip: impl Into<String>) -> Self {
+        Self::ReservedIpAddress { ip: ip.into() }
+    }
+
+    pub fn eml_parsing(file_path: impl Into<String>, reason: impl Into<String>) -> Self {
+        Self::EmlParsing {
+            file_path: file_path.into(),
+            reason: reason.into(),
+        }
+    }
+
+    pub fn domain_extraction_failed(
+        file_path: impl Into<String>,
+        reason: impl Into<String>,
+    ) -> Self {
+        Self::DomainExtractionFailed {
+            file_path: file_path.into(),
+            reason: reason.into(),
+        }
+    }
+
+    pub fn network(
+        operation: impl Into<String>,
+        target: impl Into<String>,
+        source: impl Into<Box<dyn std::error::Error + Send + Sync>>,
+    ) -> Self {
+        Self::Network {
+            operation: operation.into(),
+            target: target.into(),
+            source: source.into(),
+        }
+    }
+
+    pub fn dns_timeout(query: impl Into<String>, seconds: u64) -> Self {
+        Self::DnsTimeout {
+            query: query.into(),
+            seconds,
+        }
+    }
+
+    pub fn dns_resolution(
+        domain: impl Into<String>,
+        record_type: impl Into<String>,
+        reason: impl Into<String>,
+    ) -> Self {
+        Self::DnsResolution {
+            domain: domain.into(),
+            record_type: record_type.into(),
+            reason: reason.into(),
+        }
+    }
+
+    pub fn whois_query(
+        server: impl Into<String>,
+        query: impl Into<String>,
+        reason: impl Into<String>,
+    ) -> Self {
+        Self::WhoisQuery {
+            server: server.into(),
+            query: query.into(),
+            reason: reason.into(),
+        }
+    }
+
+    pub fn whois_unavailable(query: impl Into<String>, reason: impl Into<String>) -> Self {
+        Self::WhoisUnavailable {
+            query: query.into(),
+            reason: reason.into(),
+        }
+    }
+
+    pub fn io(path: impl Into<String>, operation: impl Into<String>, source: io::Error) -> Self {
+        Self::Io {
+            path: path.into(),
+            operation: operation.into(),
+            source,
+        }
+    }
+
+    pub fn internal(message: impl Into<String>) -> Self {
+        Self::Internal {
+            message: message.into(),
+            source: None,
+        }
+    }
+
+    pub fn internal_with(
+        message: impl Into<String>,
+        source: impl Into<Box<dyn std::error::Error + Send + Sync>>,
+    ) -> Self {
+        Self::Internal {
+            message: message.into(),
+            source: Some(source.into()),
         }
     }
 }
 
-impl std::error::Error for AbuseDetectorError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            AbuseDetectorError::NetworkError { source, .. } => Some(source.as_ref()),
-            AbuseDetectorError::IoError { source, .. } => Some(source),
-            _ => None,
-        }
-    }
-}
+/// Public result alias.
+pub type Result<T> = std::result::Result<T, AbuseDetectorError>;
 
+/// Map standard IO errors into `Io` variant (generic context).
 impl From<io::Error> for AbuseDetectorError {
-    fn from(err: io::Error) -> Self {
-        AbuseDetectorError::IoError {
-            file_path: "<unknown>".to_string(),
-            operation: "unknown operation".to_string(),
-            source: err,
+    fn from(e: io::Error) -> Self {
+        AbuseDetectorError::Io {
+            path: "<unknown>".into(),
+            operation: "unspecified".into(),
+            source: e,
         }
     }
 }
 
 impl From<AddrParseError> for AbuseDetectorError {
-    fn from(err: AddrParseError) -> Self {
-        AbuseDetectorError::InvalidIpAddress(err.to_string())
+    fn from(e: AddrParseError) -> Self {
+        AbuseDetectorError::InvalidIpAddress { ip: e.to_string() }
     }
 }
 
-/// Result type alias for convenience
-pub type Result<T> = std::result::Result<T, AbuseDetectorError>;
-
-/// Helper functions for creating specific error types
-impl AbuseDetectorError {
-    pub fn eml_parsing<P: AsRef<str>, R: AsRef<str>>(file_path: P, reason: R) -> Self {
-        Self::EmlParsing {
-            file_path: file_path.as_ref().to_string(),
-            reason: reason.as_ref().to_string(),
-        }
-    }
-
-    pub fn network_error<O: AsRef<str>, T: AsRef<str>>(
-        operation: O,
-        target: T,
-        source: Box<dyn std::error::Error + Send + Sync>,
-    ) -> Self {
-        Self::NetworkError {
-            operation: operation.as_ref().to_string(),
-            target: target.as_ref().to_string(),
-            source,
-        }
-    }
-
-    pub fn network_timeout<O: AsRef<str>, T: AsRef<str>>(
-        operation: O,
-        target: T,
-        timeout_secs: u64,
-    ) -> Self {
-        Self::NetworkTimeout {
-            operation: operation.as_ref().to_string(),
-            target: target.as_ref().to_string(),
-            timeout_secs,
-        }
-    }
-
-    pub fn dns_resolution<D: AsRef<str>, R: AsRef<str>, E: AsRef<str>>(
-        domain: D,
-        record_type: R,
-        reason: E,
-    ) -> Self {
-        Self::DnsResolution {
-            domain: domain.as_ref().to_string(),
-            record_type: record_type.as_ref().to_string(),
-            reason: reason.as_ref().to_string(),
-        }
-    }
-
-    pub fn whois_query<S: AsRef<str>, Q: AsRef<str>, R: AsRef<str>>(
-        server: S,
-        query: Q,
-        reason: R,
-    ) -> Self {
-        Self::WhoisQuery {
-            server: server.as_ref().to_string(),
-            query: query.as_ref().to_string(),
-            reason: reason.as_ref().to_string(),
-        }
-    }
-
-    pub fn io_error<P: AsRef<str>, O: AsRef<str>>(
-        file_path: P,
-        operation: O,
-        source: io::Error,
-    ) -> Self {
-        Self::IoError {
-            file_path: file_path.as_ref().to_string(),
-            operation: operation.as_ref().to_string(),
-            source,
+impl From<tokio::time::error::Elapsed> for AbuseDetectorError {
+    fn from(_: tokio::time::error::Elapsed) -> Self {
+        // Query string not available at this conversion point; caller should
+        // wrap via `dns_timeout` where context is known. Provide placeholder.
+        AbuseDetectorError::DnsTimeout {
+            query: "<unknown>".into(),
+            seconds: 0,
         }
     }
 }
 
-/// Extension trait for Result to add context for file operations
+/// Extension trait for enriching IO results with path + operation context.
 pub trait IoResultExt<T> {
-    fn with_file_context<P: AsRef<str>, O: AsRef<str>>(
-        self,
-        file_path: P,
-        operation: O,
-    ) -> Result<T>;
+    fn with_path(self, path: impl Into<String>, operation: impl Into<String>) -> Result<T>;
 }
 
 impl<T> IoResultExt<T> for std::result::Result<T, io::Error> {
-    fn with_file_context<P: AsRef<str>, O: AsRef<str>>(
-        self,
-        file_path: P,
-        operation: O,
-    ) -> Result<T> {
-        self.map_err(|err| {
-            AbuseDetectorError::io_error(file_path.as_ref(), operation.as_ref(), err)
-        })
+    fn with_path(self, path: impl Into<String>, operation: impl Into<String>) -> Result<T> {
+        self.map_err(|e| AbuseDetectorError::io(path.into(), operation.into(), e))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::{Error, ErrorKind};
 
     #[test]
-    fn test_error_display() {
-        let err = AbuseDetectorError::InvalidIpAddress("not.an.ip".to_string());
-        assert!(err.to_string().contains("Invalid IP address format"));
-
-        let err = AbuseDetectorError::PrivateIpAddress("192.168.1.1".to_string());
-        assert!(err.to_string().contains("private IP address"));
-
-        let err = AbuseDetectorError::eml_parsing("test.eml", "invalid format");
-        assert!(err.to_string().contains("Failed to parse EML"));
+    fn category_mapping() {
+        assert_eq!(
+            AbuseDetectorError::invalid_ip("x").category(),
+            ErrorCategory::Input
+        );
+        assert_eq!(
+            AbuseDetectorError::dns_timeout("a", 5).category(),
+            ErrorCategory::Network
+        );
+        assert_eq!(
+            AbuseDetectorError::eml_parsing("f", "bad").category(),
+            ErrorCategory::Parse
+        );
     }
 
     #[test]
-    fn test_io_result_ext() {
-        let io_err = Error::new(ErrorKind::NotFound, "file not found");
-        let result: std::result::Result<(), _> = Err(io_err);
+    fn display_snippets() {
+        let e = AbuseDetectorError::dns_resolution("example.com", "SOA", "NXDOMAIN");
+        let s = e.to_string();
+        assert!(s.contains("example.com"));
+        assert!(s.contains("SOA"));
+        let i = AbuseDetectorError::internal("boom");
+        assert!(i.to_string().contains("Internal error"));
+    }
 
-        let abuse_err = result.with_file_context("test.eml", "reading file");
-        assert!(abuse_err.is_err());
-
-        match abuse_err.unwrap_err() {
-            AbuseDetectorError::IoError {
-                file_path,
-                operation,
-                ..
+    #[test]
+    fn io_context() {
+        let res: std::result::Result<(), io::Error> =
+            Err(io::Error::new(io::ErrorKind::NotFound, "missing"));
+        let mapped = res.with_path("/tmp/file", "read");
+        match mapped.err().unwrap() {
+            AbuseDetectorError::Io {
+                path, operation, ..
             } => {
-                assert_eq!(file_path, "test.eml");
-                assert_eq!(operation, "reading file");
+                assert_eq!(path, "/tmp/file");
+                assert_eq!(operation, "read");
             }
-            _ => panic!("Expected IoError"),
+            other => panic!("unexpected variant: {other:?}"),
         }
-    }
-
-    #[test]
-    fn test_helper_constructors() {
-        let err = AbuseDetectorError::network_timeout("DNS lookup", "example.com", 5);
-        assert!(err.to_string().contains("timed out after 5 seconds"));
-
-        let err = AbuseDetectorError::dns_resolution("example.com", "SOA", "NXDOMAIN");
-        assert!(err.to_string().contains("DNS SOA lookup failed"));
     }
 }

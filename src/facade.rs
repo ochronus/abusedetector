@@ -36,14 +36,14 @@ impl AbuseDetector {
     /// Analyze a direct IPv4 input.
     pub async fn analyze_ip(ip: Ipv4Addr, opts: AnalysisOptions) -> Result<AbuseAnalysis> {
         if is_private(IpAddr::V4(ip)) {
-            return Err(AbuseDetectorError::Configuration(format!(
-                "{ip} is a private (RFC1918) address"
-            )));
+            return Err(AbuseDetectorError::Configuration {
+                message: format!("{ip} is a private (RFC1918) address"),
+            });
         }
         if is_reserved(IpAddr::V4(ip)) {
-            return Err(AbuseDetectorError::Configuration(format!(
-                "{ip} is a reserved address"
-            )));
+            return Err(AbuseDetectorError::Configuration {
+                message: format!("{ip} is a reserved address"),
+            });
         }
 
         let start = Instant::now();
@@ -303,8 +303,8 @@ async fn traverse_soa(
         match tokio::time::timeout(
             std::time::Duration::from_secs(opts.dns_timeout_secs),
             resolver.lookup(
-                Name::from_ascii(&candidate).map_err(|e| {
-                    AbuseDetectorError::Configuration(format!("Invalid domain name: {e}"))
+                Name::from_ascii(&candidate).map_err(|e| AbuseDetectorError::Configuration {
+                    message: format!("Invalid domain name: {e}"),
                 })?,
                 RecordType::SOA,
             ),
