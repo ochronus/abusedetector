@@ -12,6 +12,7 @@ It correlates multiple data sources (WHOIS, DNS, message metadata) and applies s
 
 - **Direct IPv4 lookup** (`abusedetector <ip>`)
 - **`.eml` mode** to extract the originating public sender IP (`--eml path/to/message.eml`)
+- **Automatic domain fallback when no public IPv4 is present** (EML mode continues using sender domain abuse contacts rather than aborting)
 - **Dual escalation paths** - separate email infrastructure and sender hosting abuse reporting
 - **Smart sender domain extraction** with subdomain handling and fallback logic
 - **Cloud provider detection** (AWS, Azure, GCP, etc.) with specialized abuse contacts
@@ -115,7 +116,7 @@ abusedetector --batch 46.4.15.45
 | Option | Description |
 | ------ | ----------- |
 | `<ip>` | Target IPv4 address (omit when using `--eml`) |
-| `--eml <FILE>` | Use an `.eml` file; extract originating sender IP |
+| `--eml <FILE>` | Use an `.eml` file; extract originating sender IP (falls back to domain abuse contacts if no public IPv4 found) |
 | `--verbose <n>` | Verbosity: 0 (silent), 1 (errors), 2 (warnings), 5 (trace) |
 | `--json` | Output results in structured JSON format (with schema) |
 | `--yaml` | Output results in structured YAML format (human-readable) |
@@ -139,7 +140,7 @@ abusedetector --batch 46.4.15.45
 
 ### 1. Input Resolution & Analysis
 - **Direct IP**: User-provided IPv4 address
-- **EML extraction**: Sophisticated header parsing with priority order:
+- **EML extraction**: Sophisticated header parsing with priority order (with **domain fallback** if no public IPv4 emerges):
   - Specialized provider headers (`X-Mailgun-Sending-Ip`, `X-Spam-source`)
   - Authentication-Results remote IP markers
   - SPF client IP information
@@ -244,7 +245,7 @@ The tool provides comprehensive structured output with a published JSON schema:
 
 **Schema URL**: `https://raw.githubusercontent.com/ochronus/abusedetector/main/schema/output.json`
 
-**Example JSON Structure**:
+**Example JSON Structure** (standard IPv4 case):
 ```json
 {
   "metadata": {
@@ -269,31 +270,66 @@ The tool provides comprehensive structured output with a published JSON schema:
 }
 ```
 
+**Domain Fallback JSON Example** (no public IPv4 found):
+```json
+{
+  "metadata": { "...": "..." },
+  "input": {
+    "ip_address": "0.0.0.0",
+    "ip_source": {
+      "email_header": {
+        "header_field": "Domain fallback (no IPv4 found)",
+        "priority": 0
+      }
+    },
+    "sender_domain": "ventionteams.com",
+    "input_method": "eml_file"
+  },
+  "primary_contacts": [
+    {
+      "email": "abuse@ventionteams.com",
+      "contact_type": "abuse",
+      "confidence": 3
+    }
+  ],
+  "result": {
+    "success": true,
+    "result_quality": "good"
+  }
+}
+```
+
 ---
 
 ## EML Mode Details
 
 ### Sender IP Extraction Priority
 
-1. **`X-Mailgun-Sending-Ip`** - Mailgun's sending IP header
-2. **`X-Spam-source: IP='x.x.x.x'`** - Anti-spam system IP detection
-3. **`smtp.remote-ip=...`** - Authentication/ARC headers
-4. **`Received-SPF: ... client-ip=...`** - SPF validation results
-5. **`X-Originating-IP:`** - Microsoft/legacy originating IP
-6. **Received chain analysis** - Chronological parsing with provider keyword bias
+1. **`X-Mailgun-Sending-Ip`** - Mailgun's sending IP header  
+2. **`X-Spam-source: IP='x.x.x.x'`** - Anti-spam system IP detection  
+3. **`smtp.remote-ip=...`** - Authentication/ARC headers  
+4. **`Received-SPF: ... client-ip=...`** - SPF validation results  
+5. **`X-Originating-IP:`** - Microsoft/legacy originating IP  
+6. **Received chain analysis** - Chronological parsing with provider keyword bias  
+7. **Domain fallback** – If no public IPv4 address is discovered after all above steps, the tool switches to sender-domain based abuse contact discovery (no hard failure).
 
 ### Sender Domain Extraction
 
-- Extracts domain from `From:` header email address
-- Handles complex email addresses with display names
-- Used for building sender hosting escalation path
-- Logged for transparency: `"Detected sender domain (from EML): domain.com"`
+- Extracts domain from `From:` header email address  
+- Handles complex email addresses with display names  
+- Used for building sender hosting escalation path  
+- Logged for transparency: `"Detected sender domain (from EML): domain.com"`  
+- **Also powers domain fallback** when no public IPv4 can be extracted (e.g. purely IPv6 hop chain or masked infrastructure).
 
-### Private IP Handling
+### Private IP Handling & No-IPv4 Domain Fallback
 
-- Private/reserved addresses ignored unless no public alternative exists
-- Comprehensive RFC compliance (RFC1918, RFC6598, etc.)
-- Fails gracefully when no public IP found
+- Private/reserved addresses ignored unless no public alternative exists  
+- Comprehensive RFC compliance (RFC1918, RFC6598, etc.)  
+- If no public IPv4 is found at all, the tool now performs **domain fallback**:
+  - Generates abuse/security patterns for the sender’s domain (`abuse@`, `security@`, etc.)
+  - Queries abuse.net (if enabled) for that domain  
+  - Performs SOA RNAME traversal on the sender domain  
+  - Continues producing escalation paths (where possible) without aborting.
 
 ---
 
@@ -421,10 +457,27 @@ The tool has been tested against real-world email samples with **100% accuracy**
 
 ## Exit Behavior
 
-- Returns `0` on successful run (even if no address found; logged to stderr if verbosity ≥1)
-- Returns `0` early when target IP is private/reserved (message printed if verbosity ≥1)  
-- Non-fatal network timeouts treated as partial data (best-effort approach)
-- Escalation path generation failures don't cause tool failure
+Current exit codes (post IPv6 / domain-fallback refinements):
+
+- `0` Successful run:
+  - Normal IP lookup completed
+  - Domain fallback succeeded (no public IPv4 extracted, but sender domain contacts produced)
+  - No primary contacts found, but execution completed (message emitted on stderr if verbosity ≥1)
+  - Target IPv4 is private or reserved (validation stops early; informational error printed, still exits 0)
+  - Escalation path generation partially failed (tool still returns best-effort data)
+  - Network / WHOIS / DNS timeouts or partial failures (degraded output only)
+
+- `1` Hard failure (no useful result possible):
+  - Invalid IPv4 address format
+  - Missing required input (neither an IP nor `--eml` provided)
+  - EML file unreadable / missing
+  - Extracted non-IPv4 address and no sender domain available for fallback
+  - No public IPv4 found AND no sender domain could be derived (cannot proceed)
+
+Notes:
+- Domain fallback (IPv6-only header chains) is treated as a successful path (exit `0`).
+- Non-fatal issues are surfaced on stderr according to `--verbose` level.
+- Use the structured output (`--json` / `--yaml`) plus `warnings[]` for programmatic quality checks.
 
 ---
 
@@ -573,6 +626,7 @@ abusedetector --eml message.eml --yaml --show-escalation > report.yaml
 | **"No sender domain detected"** | Complex From header parsing | Use `--verbose=5` to see extraction attempts |
 | **Incorrect registrar** | Subdomain vs. parent domain | Tool automatically handles this; check with `--verbose=5` |
 | **No cloud provider detected** | IP not in known ranges | This is normal; tool falls back to ASN/registrar |
+| **No public IPv4 found in EML** | Pure IPv6 path / masked headers | Domain fallback triggered; contacts derived from sender domain |
 | **Empty escalation path** | Network lookup failures | Check connectivity; retry with `--verbose=5` |
 | **Only registry addresses** | Heuristics filtered direct contacts | Use `--verbose=5` to see raw findings |
 | **Slow responses** | WHOIS timeouts or rate limits | Retry; consider future caching implementation |
@@ -697,6 +751,7 @@ abusedetector --generate-schema                # Generate JSON schema
 abusedetector --eml mail.eml --show-escalation # Primary + escalation
 abusedetector --eml mail.eml --escalation-only # Escalation only
 abusedetector --eml mail.eml --json --show-escalation # JSON with escalation
+abusedetector --eml ipv6_only.eml                     # Falls back to domain contacts (no IPv4)
 
 # Debugging
 abusedetector --verbose=5 1.2.3.4              # Full trace

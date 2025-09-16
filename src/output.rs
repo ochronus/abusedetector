@@ -617,7 +617,6 @@ mod tests {
         assert!(text.contains("security@example.org"));
         assert!(!text.contains("confidence"));
     }
-
     #[test]
     fn test_text_formatter_with_confidence() {
         let results = create_test_results();

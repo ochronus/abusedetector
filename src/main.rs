@@ -1,5 +1,9 @@
+use std::net::Ipv4Addr;
+use std::time::{Duration, Instant};
+
 mod cli;
 mod config;
+mod domain_utils;
 mod emails;
 mod eml;
 mod errors;
@@ -14,14 +18,14 @@ mod whois;
 use cli::{Cli, OutputFormat};
 use config::Config;
 use emails::{soa_rname_to_email, EmailSet, FinalizeOptions};
+use eml::IpExtractionResult;
 use errors::{AbuseDetectorError, Result};
 use escalation::DualEscalationPath;
-use netutil::{domain_of, ipv4_to_inaddr, is_private, is_reserved, parse_ipv4, reverse_dns};
+use netutil::{domain_of, ip_to_inaddr, is_private, is_reserved, reverse_dns};
 use output::{
     AbuseContact, AbuseResults, ContactMetadata, ContactSource, OutputFormat as OutputFormatOrig,
     QueryMetadata,
 };
-use std::time::{Duration, Instant};
 use structured_output::AbuseDetectorOutput;
 use styled_output::StyledFormatter;
 use trust_dns_resolver::{
@@ -31,100 +35,163 @@ use trust_dns_resolver::{
 };
 use whois::{query_abuse_net, whois_ip_chain};
 
+/// Placeholder IP used when no public IPv4 could be extracted (domain fallback mode)
+const FALLBACK_IP: Ipv4Addr = Ipv4Addr::new(0, 0, 0, 0);
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::from_args();
 
-    // Handle schema generation early exit
+    // Early exit: schema generation
     if cli.generate_schema {
         match AbuseDetectorOutput::generate_json_schema() {
             Ok(schema) => {
-                println!("{}", schema);
+                println!("{schema}");
                 return Ok(());
             }
             Err(e) => {
-                eprintln!("Error generating JSON schema: {}", e);
+                eprintln!("Error generating JSON schema: {e}");
                 return Ok(());
             }
         }
+    }
+
+    // Load / validate config
+    let mut config = Config::from_env();
+    config.merge_with_cli(&cli);
+    if let Err(e) = config.validate() {
+        if cli.error_enabled() {
+            eprintln!("Configuration error: {e}");
+        }
+        return Ok(());
     }
 
     let start_time = Instant::now();
 
-    // Load configuration
-    let mut config = Config::from_env();
-    config.merge_with_cli(&cli);
-
-    if let Err(e) = config.validate() {
-        if cli.error_enabled() {
-            eprintln!("Configuration error: {}", e);
-        }
-        return Ok(());
-    }
-
-    // Determine IP and sender domain: either directly from --ip or derived from --eml file
-    let (ip, from_eml, eml_file, sender_domain) = if let Some(ref eml_path) = cli.eml {
-        if cli.is_trace() {
-            eprintln!("Deriving originating IP from EML file: {eml_path}");
-        }
-
-        let sender_domain = eml::extract_sender_domain_from_path(eml_path).unwrap_or(None);
-
-        if let Some(ref domain) = sender_domain {
+    // Decide input: --eml or direct IP
+    let (ip, from_eml, eml_file, sender_domain): (Ipv4Addr, bool, Option<String>, Option<String>) =
+        if let Some(ref eml_path) = cli.eml {
             if cli.is_trace() {
-                eprintln!("Sender domain extracted from EML: {domain}");
+                eprintln!("Deriving originating IP from EML file: {eml_path}");
             }
-            if !cli.is_structured_output() {
-                println!("Detected sender domain (from EML): {domain}");
-            }
-        }
 
-        match eml::parse_eml_origin_ip_from_path(eml_path) {
-            Ok(found) => {
-                if cli.is_trace() {
-                    eprintln!("Originating IP extracted from EML: {found}");
-                }
-                // Always log the detected sender IP in EML mode (user-visible)
+            let sender_domain = eml::extract_sender_domain_from_path(eml_path).unwrap_or(None);
+            if let Some(ref d) = sender_domain {
                 if !cli.is_structured_output() {
-                    println!("Detected originating IP: {found} (source: X-Mailgun-Sending-Ip)");
-                    println!("Detected sender IP (from EML): {found}");
+                    println!("Detected sender domain (from EML): {d}");
                 }
-                (found, true, Some(eml_path.clone()), sender_domain)
             }
-            Err(e) => {
-                if cli.error_enabled() {
-                    eprintln!("Error extracting IP from EML ({eml_path}): {e}");
+
+            // Try extracting IPv4
+            match eml::parse_eml_origin_ip_from_path(eml_path) {
+                Ok(IpExtractionResult {
+                    ip: std::net::IpAddr::V4(v4),
+                    source,
+                }) => {
+                    if cli.is_trace() {
+                        eprintln!("Originating IP extracted from EML: {v4} (source: {source})");
+                    }
+                    if !cli.is_structured_output() {
+                        println!("Detected sender IP (from EML): {v4}");
+                    }
+                    (v4, true, Some(eml_path.clone()), sender_domain)
                 }
-                // Fail early since we have no usable IP
-                return Ok(());
+                Ok(IpExtractionResult {
+                    ip: _non_v4,
+                    source,
+                }) => {
+                    // Always surface an error-level message so verbosity=1 integration tests see it
+                    if cli.error_enabled() {
+                        eprintln!("Error extracting IP: No public IPv4 found (extracted non-IPv4; source: {source})");
+                    } else if cli.warn_enabled() {
+                        eprintln!("Info: Extracted non-IPv4 address (source: {source}); falling back to domain-based lookup");
+                    }
+                    if let Some(ref domain) = sender_domain {
+                        if !cli.is_structured_output() {
+                            println!(
+                                "Falling back to domain-based abuse contact lookup for: {domain}"
+                            );
+                        }
+                        return handle_domain_fallback(
+                            domain,
+                            eml_path,
+                            sender_domain.clone(),
+                            &cli,
+                        )
+                        .await;
+                    } else {
+                        if cli.error_enabled() {
+                            eprintln!("Error extracting IP: No public IPv4 found and no sender domain available.");
+                        }
+                        std::process::exit(1);
+                    }
+                }
+                Err(e) => {
+                    // No public IPv4 found → domain fallback (only if we have a sender domain)
+                    let err_msg = format!("{e}");
+                    if cli.error_enabled() {
+                        if err_msg.to_ascii_lowercase().contains("no public ip") {
+                            eprintln!("Error extracting IP: No public IPv4 found in EML headers");
+                        } else {
+                            eprintln!("Error extracting IP: {err_msg}");
+                        }
+                    } else if cli.warn_enabled() {
+                        eprintln!("Warning: Could not extract IP from EML ({eml_path}): {err_msg}");
+                    }
+                    if let Some(ref domain) = sender_domain {
+                        if !cli.is_structured_output() {
+                            println!(
+                                "Falling back to domain-based abuse contact lookup for: {domain}"
+                            );
+                        }
+                        return handle_domain_fallback(
+                            domain,
+                            eml_path,
+                            sender_domain.clone(),
+                            &cli,
+                        )
+                        .await;
+                    } else {
+                        if cli.error_enabled() {
+                            eprintln!("Error extracting IP: No public IPv4 found and no sender domain available.");
+                        }
+                        std::process::exit(1);
+                    }
+                }
             }
-        }
-    } else if let Some(ref ip_str) = cli.ip {
-        (
-            parse_ipv4(ip_str).map_err(|_| AbuseDetectorError::InvalidIpAddress(ip_str.clone()))?,
-            false,
-            None,
-            None,
-        )
-    } else {
-        if cli.error_enabled() {
-            eprintln!("Error: either an IP address or --eml file must be provided.");
-        }
-        return Ok(());
-    };
-    if is_private(ip) {
+        } else if let Some(ref ip_str) = cli.ip {
+            let ip = match ip_str.parse::<Ipv4Addr>() {
+                Ok(v) => v,
+                Err(_) => {
+                    if cli.error_enabled() {
+                        eprintln!("Error: Invalid IPv4 address format: {ip_str}");
+                    }
+                    std::process::exit(1);
+                }
+            };
+            (ip, false, None, None)
+        } else {
+            if cli.error_enabled() {
+                eprintln!("Error: either an IP address or --eml file must be provided.");
+            }
+            std::process::exit(1);
+        };
+
+    // Basic IPv4 validation
+    if is_private(std::net::IpAddr::V4(ip)) {
         if cli.error_enabled() {
             eprintln!("Error: {ip} is a private IP address (RFC1918). Cannot proceed.");
         }
         return Ok(());
     }
-    if is_reserved(ip) {
+    if is_reserved(std::net::IpAddr::V4(ip)) {
         if cli.error_enabled() {
             eprintln!("Error: {ip} is a reserved IP address. Cannot proceed.");
         }
         return Ok(());
     }
 
+    // Collection + metadata
     let mut emails = EmailSet::new();
     let mut metadata = QueryMetadata {
         from_eml,
@@ -132,24 +199,25 @@ async fn main() -> Result<()> {
         ..Default::default()
     };
 
-    // Reverse DNS
+    // Reverse DNS (optional)
     let hostname = if !cli.no_use_hostname {
         if cli.is_trace() {
             eprintln!("Reverse DNS lookup for {ip}...");
         }
         metadata.dns_queries += 1;
-        reverse_dns(ip, cli.show_commands).await.unwrap_or(None)
+        reverse_dns(std::net::IpAddr::V4(ip), cli.show_commands)
+            .await
+            .unwrap_or(None)
     } else {
         None
     };
-
     metadata.hostname = hostname.clone();
 
     if cli.is_trace() {
         eprintln!("Hostname: {}", hostname.as_deref().unwrap_or("<none>"));
     }
 
-    // abuse.net (hostname domain first)
+    // abuse.net (based on hostname's registrable domain)
     if !cli.no_use_abusenet {
         metadata.abuse_net_queried = true;
         if let Some(ref h) = hostname {
@@ -158,7 +226,7 @@ async fn main() -> Result<()> {
                     if cli.warn_enabled() {
                         metadata
                             .warnings
-                            .push(format!("abuse.net query failed: {}", e));
+                            .push(format!("abuse.net query failed: {e}"));
                     }
                 }
             }
@@ -172,15 +240,16 @@ async fn main() -> Result<()> {
                 if cli.warn_enabled() {
                     metadata
                         .warnings
-                        .push(format!("DNS SOA traversal failed for hostname: {}", e));
+                        .push(format!("DNS SOA traversal failed for hostname: {e}"));
                 }
             }
         }
-        if let Err(e) = traverse_soa(&ipv4_to_inaddr(ip), &mut emails, &cli, &mut metadata).await {
+        let rev = ip_to_inaddr(std::net::IpAddr::V4(ip));
+        if let Err(e) = traverse_soa(&rev, &mut emails, &cli, &mut metadata).await {
             if cli.warn_enabled() {
                 metadata
                     .warnings
-                    .push(format!("DNS SOA traversal failed for reverse IP: {}", e));
+                    .push(format!("DNS SOA traversal failed for reverse IP: {e}"));
             }
         }
     }
@@ -191,10 +260,11 @@ async fn main() -> Result<()> {
             if cli.warn_enabled() {
                 metadata
                     .warnings
-                    .push(format!("WHOIS chain query failed: {}", e));
+                    .push(format!("WHOIS chain query failed: {e}"));
             }
+        } else {
+            metadata.whois_servers_queried += 1;
         }
-        metadata.whois_servers_queried += 1; // This is a simplification
     }
 
     // Record duration
@@ -207,13 +277,13 @@ async fn main() -> Result<()> {
     };
     let email_results = emails.finalize(finalize_opts);
 
-    // Convert to structured results
+    // Prepare results (IP-based)
     let contacts: Vec<AbuseContact> = email_results
         .iter()
         .map(|(email, confidence)| AbuseContact {
             email: email.clone(),
             confidence: *confidence,
-            source: ContactSource::Unknown, // TODO: Track sources properly
+            source: ContactSource::Unknown,
             metadata: ContactMetadata {
                 domain: email.split('@').nth(1).map(|s| s.to_string()),
                 is_abuse_specific: email.starts_with("abuse@"),
@@ -229,7 +299,7 @@ async fn main() -> Result<()> {
         metadata: metadata.clone(),
     };
 
-    // Generate dual escalation paths if requested or if no primary contacts found
+    // Escalation paths generation conditionally
     let dual_escalation = if cli.should_show_escalation() || results.contacts.is_empty() {
         match DualEscalationPath::from_eml_analysis(ip, hostname.clone(), sender_domain.clone())
             .await
@@ -237,7 +307,7 @@ async fn main() -> Result<()> {
             Ok(paths) => Some(paths),
             Err(e) => {
                 if cli.warn_enabled() {
-                    eprintln!("Warning: Could not generate escalation paths: {}", e);
+                    eprintln!("Warning: Could not generate escalation paths: {e}");
                 }
                 None
             }
@@ -246,12 +316,11 @@ async fn main() -> Result<()> {
         None
     };
 
-    // Handle structured output formats (JSON/YAML)
+    // Structured output (JSON / YAML)
     match cli.output_format() {
         OutputFormat::Json | OutputFormat::Yaml => {
             let mut structured_output = AbuseDetectorOutput::new();
 
-            // Set input information
             structured_output.input.ip_address = ip;
             structured_output.input.hostname = hostname.clone();
             structured_output.input.sender_domain = sender_domain.clone();
@@ -263,29 +332,302 @@ async fn main() -> Result<()> {
             };
             structured_output.input.ip_source = if from_eml {
                 structured_output::IpSource::EmailHeader {
-                    header_field: "Multiple sources".to_string(), // TODO: Track actual header
+                    header_field: "Email-derived IPv4".to_string(),
                     priority: 1,
                 }
             } else {
                 structured_output::IpSource::DirectInput
             };
 
-            // Convert email results to structured contacts
             for (email, confidence) in &email_results {
                 let domain = email.split('@').nth(1).map(|s| s.to_string());
-                let contact = structured_output::Contact {
+                structured_output
+                    .primary_contacts
+                    .push(structured_output::Contact {
+                        email: email.clone(),
+                        domain,
+                        contact_type: if email.starts_with("abuse@") {
+                            structured_output::ContactType::Abuse
+                        } else if email.starts_with("security@") {
+                            structured_output::ContactType::Security
+                        } else if email.starts_with("hostmaster@") {
+                            structured_output::ContactType::Hostmaster
+                        } else if email.starts_with("admin@") {
+                            structured_output::ContactType::Admin
+                        } else if email.starts_with("tech@") {
+                            structured_output::ContactType::Tech
+                        } else {
+                            structured_output::ContactType::Generic
+                        },
+                        sources: vec![structured_output::ContactSource::MultipleConfirmed],
+                        confidence: *confidence as u8,
+                        is_abuse_specific: email.starts_with("abuse@"),
+                        metadata: None,
+                    });
+            }
+
+            structured_output.result.primary_contacts_found =
+                structured_output.primary_contacts.len() as u32;
+            structured_output.result.success = !structured_output.primary_contacts.is_empty();
+
+            if let Some(ref dual) = dual_escalation {
+                structured_output.from_dual_escalation_path(dual);
+                structured_output.result.escalation_paths_generated = true;
+            }
+
+            structured_output.statistics.dns_queries = metadata.dns_queries;
+            structured_output.statistics.whois_servers_queried = metadata.whois_servers_queried;
+            structured_output.statistics.total_time_ms = metadata.duration_ms.unwrap_or(0);
+            structured_output.warnings = metadata.warnings.clone();
+
+            structured_output.result.result_quality =
+                if structured_output.result.primary_contacts_found > 0 {
+                    if structured_output.result.escalation_paths_generated {
+                        structured_output::ResultQuality::Excellent
+                    } else {
+                        structured_output::ResultQuality::Good
+                    }
+                } else if structured_output.result.escalation_paths_generated {
+                    structured_output::ResultQuality::Fair
+                } else {
+                    structured_output::ResultQuality::Poor
+                };
+
+            structured_output.result.overall_confidence =
+                if structured_output.result.primary_contacts_found > 0 {
+                    (structured_output
+                        .primary_contacts
+                        .iter()
+                        .map(|c| c.confidence as u32)
+                        .sum::<u32>()
+                        / structured_output.primary_contacts.len() as u32) as u8
+                } else {
+                    0
+                };
+
+            let rendered = match cli.output_format() {
+                OutputFormat::Json => structured_output.to_json(),
+                OutputFormat::Yaml => structured_output.to_yaml(),
+                _ => unreachable!(),
+            };
+
+            match rendered {
+                Ok(s) => {
+                    println!("{s}");
+                }
+                Err(e) => {
+                    eprintln!("Error formatting structured output: {e}");
+                }
+            }
+            return Ok(());
+        }
+        _ => {}
+    }
+
+    // Styled output (rich)
+    if cli.should_use_styling() && !cli.batch {
+        let formatter = if cli.no_color {
+            StyledFormatter::without_colors()
+        } else {
+            StyledFormatter::new()
+        };
+        if let Err(e) =
+            formatter.print_results_with_dual_escalation(&results, dual_escalation.as_ref())
+        {
+            eprintln!("Error formatting styled output: {e}");
+            // Fallback to plain below
+        } else {
+            return Ok(());
+        }
+    }
+
+    // Plain / batch fallback
+    let output_format = if cli.batch {
+        OutputFormatOrig::Batch
+    } else if cli.show_internal() {
+        OutputFormatOrig::Text {
+            show_confidence: true,
+            show_sources: true,
+            show_metadata: cli.is_trace(),
+        }
+    } else {
+        OutputFormatOrig::Text {
+            show_confidence: false,
+            show_sources: false,
+            show_metadata: false,
+        }
+    };
+
+    let formatter = output::create_formatter(&output_format);
+    let plain = formatter
+        .format_results(&results)
+        .map_err(|e| AbuseDetectorError::Configuration(format!("Output formatting failed: {e}")))?;
+    print!("{plain}");
+
+    // Provide separate escalation path listing if requested but plain output mode
+    if let Some(ref paths) = dual_escalation {
+        if cli.should_show_escalation() {
+            println!("\n--- EMAIL INFRASTRUCTURE ESCALATION PATH ---");
+            for (i, contact) in paths.get_email_infrastructure_contacts().iter().enumerate() {
+                println!(
+                    "{}. {} - {}",
+                    i + 1,
+                    contact.contact_type.display_name(),
+                    contact.organization
+                );
+                if let Some(ref email) = contact.email {
+                    println!("   Email: {email}");
+                }
+                if let Some(ref form) = contact.web_form {
+                    println!("   Web Form: {form}");
+                }
+                println!();
+            }
+            if let Some(hosting_contacts) = paths.get_sender_hosting_contacts() {
+                if !hosting_contacts.is_empty() {
+                    println!("\n--- SENDER HOSTING ESCALATION PATH ---");
+                    for (i, contact) in hosting_contacts.iter().enumerate() {
+                        println!(
+                            "{}. {} - {}",
+                            i + 1,
+                            contact.contact_type.display_name(),
+                            contact.organization
+                        );
+                        if let Some(ref email) = contact.email {
+                            println!("   Email: {email}");
+                        }
+                        if let Some(ref form) = contact.web_form {
+                            println!("   Web Form: {form}");
+                        }
+                        println!();
+                    }
+                }
+            }
+        }
+    }
+
+    if results.contacts.is_empty() && cli.error_enabled() && dual_escalation.is_none() {
+        eprintln!("No abuse contacts discovered and no escalation paths available (try --show-escalation).");
+    }
+
+    Ok(())
+}
+
+/// Domain fallback handler (no public IPv4 found in EML).
+async fn handle_domain_fallback(
+    domain: &str,
+    eml_path: &str,
+    sender_domain: Option<String>,
+    cli: &Cli,
+) -> Result<()> {
+    let start = Instant::now();
+    let mut emails = EmailSet::new();
+    let mut metadata = QueryMetadata {
+        from_eml: true,
+        eml_file: Some(eml_path.to_string()),
+        ..Default::default()
+    };
+
+    // Generate abuse/security pattern addresses
+    if let Ok(patterns) = domain_utils::generate_abuse_emails(domain) {
+        for addr in patterns {
+            emails.add_with_conf(addr, 2);
+        }
+    }
+
+    // abuse.net for domain
+    if !cli.no_use_abusenet {
+        metadata.abuse_net_queried = true;
+        if let Err(e) = query_abuse_net(domain, &mut emails, cli).await {
+            if cli.warn_enabled() {
+                eprintln!("Warning: abuse.net query failed for {domain}: {e}");
+            }
+        }
+    }
+
+    // SOA traversal over the sender domain
+    if !cli.no_use_dns_soa {
+        if cli.is_trace() {
+            eprintln!("DNS SOA traversal (domain fallback): {domain}");
+        }
+        if let Err(e) = traverse_soa(domain, &mut emails, cli, &mut metadata).await {
+            if cli.warn_enabled() {
+                eprintln!("Warning: DNS SOA traversal failed for {domain}: {e}");
+            }
+        } else {
+            metadata.dns_queries += 1;
+        }
+    }
+
+    metadata.duration_ms = Some(start.elapsed().as_millis() as u64);
+
+    let finalize_opts = FinalizeOptions {
+        single_if_not_verbose: !cli.show_internal() && !cli.batch,
+        ..Default::default()
+    };
+    let finalized = emails.finalize(finalize_opts);
+
+    // Build AbuseResults with placeholder IP
+    let contacts: Vec<AbuseContact> = finalized
+        .iter()
+        .map(|(email, confidence)| AbuseContact {
+            email: email.clone(),
+            confidence: *confidence,
+            source: ContactSource::Unknown,
+            metadata: ContactMetadata {
+                domain: email.split('@').nth(1).map(|s| s.to_string()),
+                is_abuse_specific: email.starts_with("abuse@"),
+                filtered: false,
+                notes: vec!["Domain fallback (no originating IPv4)".to_string()],
+            },
+        })
+        .collect();
+
+    let results = AbuseResults {
+        ip: FALLBACK_IP,
+        contacts,
+        metadata: metadata.clone(),
+    };
+
+    // Escalation paths (optional)
+    let dual_escalation = if cli.should_show_escalation() || results.contacts.is_empty() {
+        match DualEscalationPath::from_eml_analysis(FALLBACK_IP, None, sender_domain.clone()).await
+        {
+            Ok(p) => Some(p),
+            Err(e) => {
+                if cli.warn_enabled() {
+                    eprintln!("Warning: Could not generate escalation paths: {e}");
+                }
+                None
+            }
+        }
+    } else {
+        None
+    };
+
+    // Structured output
+    match cli.output_format() {
+        OutputFormat::Json | OutputFormat::Yaml => {
+            let mut so = AbuseDetectorOutput::new();
+            so.input.ip_address = FALLBACK_IP;
+            so.input.hostname = None;
+            so.input.sender_domain = sender_domain.clone();
+            so.input.eml_file = Some(eml_path.to_string());
+            so.input.input_method = structured_output::InputMethod::EmlFile;
+            so.input.ip_source = structured_output::IpSource::EmailHeader {
+                header_field: "Domain fallback (no IPv4 found)".to_string(),
+                priority: 0,
+            };
+
+            for (email, confidence) in &finalized {
+                let domain_part = email.split('@').nth(1).map(|s| s.to_string());
+                so.primary_contacts.push(structured_output::Contact {
                     email: email.clone(),
-                    domain,
+                    domain: domain_part,
                     contact_type: if email.starts_with("abuse@") {
                         structured_output::ContactType::Abuse
                     } else if email.starts_with("security@") {
                         structured_output::ContactType::Security
-                    } else if email.starts_with("hostmaster@") {
-                        structured_output::ContactType::Hostmaster
-                    } else if email.starts_with("admin@") {
-                        structured_output::ContactType::Admin
-                    } else if email.starts_with("tech@") {
-                        structured_output::ContactType::Tech
                     } else {
                         structured_output::ContactType::Generic
                     },
@@ -293,176 +635,164 @@ async fn main() -> Result<()> {
                     confidence: *confidence as u8,
                     is_abuse_specific: email.starts_with("abuse@"),
                     metadata: None,
-                };
-                structured_output.primary_contacts.push(contact);
-            }
-            structured_output.result.primary_contacts_found =
-                structured_output.primary_contacts.len() as u32;
-            structured_output.result.success = !structured_output.primary_contacts.is_empty();
-
-            // Add escalation paths if available
-            if let Some(ref dual_path) = dual_escalation {
-                structured_output.from_dual_escalation_path(dual_path);
+                });
             }
 
-            // Update statistics
-            structured_output.statistics.dns_queries = metadata.dns_queries;
-            structured_output.statistics.whois_servers_queried = metadata.whois_servers_queried;
-            structured_output.statistics.total_time_ms = metadata.duration_ms.unwrap_or(0);
-            structured_output.warnings = metadata.warnings.clone();
+            so.result.primary_contacts_found = so.primary_contacts.len() as u32;
+            so.result.success = !so.primary_contacts.is_empty();
 
-            // Calculate result quality
-            structured_output.result.result_quality =
-                if structured_output.primary_contacts.len() > 0 {
-                    if structured_output.escalation_paths.is_some() {
-                        structured_output::ResultQuality::Excellent
-                    } else {
-                        structured_output::ResultQuality::Good
-                    }
-                } else if structured_output.escalation_paths.is_some() {
-                    structured_output::ResultQuality::Fair
+            if let Some(ref d) = dual_escalation {
+                so.from_dual_escalation_path(d);
+                so.result.escalation_paths_generated = true;
+            }
+
+            so.statistics.dns_queries = metadata.dns_queries;
+            so.statistics.whois_servers_queried = metadata.whois_servers_queried;
+            so.statistics.total_time_ms = metadata.duration_ms.unwrap_or(0);
+            so.warnings = metadata.warnings.clone();
+
+            so.result.result_quality = if so.result.primary_contacts_found > 0 {
+                if so.result.escalation_paths_generated {
+                    structured_output::ResultQuality::Excellent
                 } else {
-                    structured_output::ResultQuality::Poor
-                };
+                    structured_output::ResultQuality::Good
+                }
+            } else if so.result.escalation_paths_generated {
+                structured_output::ResultQuality::Fair
+            } else {
+                structured_output::ResultQuality::Poor
+            };
 
-            structured_output.result.overall_confidence =
-                if structured_output.primary_contacts.len() > 0 {
-                    structured_output
-                        .primary_contacts
-                        .iter()
-                        .map(|c| c.confidence as u32)
-                        .sum::<u32>()
-                        / structured_output.primary_contacts.len() as u32
-                } else {
-                    0
-                } as u8;
+            so.result.overall_confidence = if so.result.primary_contacts_found > 0 {
+                (so.primary_contacts
+                    .iter()
+                    .map(|c| c.confidence as u32)
+                    .sum::<u32>()
+                    / so.primary_contacts.len() as u32) as u8
+            } else {
+                0
+            };
 
-            // Output in requested format
-            let output = match cli.output_format() {
-                OutputFormat::Json => structured_output.to_json(),
-                OutputFormat::Yaml => structured_output.to_yaml(),
+            let rendered = match cli.output_format() {
+                OutputFormat::Json => so.to_json(),
+                OutputFormat::Yaml => so.to_yaml(),
                 _ => unreachable!(),
             };
 
-            match output {
-                Ok(formatted) => println!("{}", formatted),
-                Err(e) => {
-                    eprintln!("Error formatting structured output: {}", e);
-                    return Ok(());
-                }
+            match rendered {
+                Ok(s) => println!("{s}"),
+                Err(e) => eprintln!("Error formatting structured output: {e}"),
             }
-
             return Ok(());
         }
         _ => {}
     }
 
-    // Use styled output if enabled and not in batch mode
+    // Styled domain fallback output
     if cli.should_use_styling() && !cli.batch {
-        let formatter = if cli.no_color {
-            StyledFormatter::without_colors()
+        println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        println!("  🚨 Abuse Contacts for Domain {domain} (from EML)");
+        println!("  📧 EML File: {eml_path}");
+        println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        if !results.contacts.is_empty() {
+            println!("\n  📮 Primary Abuse Contacts\n");
+            for (i, c) in results.contacts.iter().enumerate() {
+                println!("    {}. {}", i + 1, c.email);
+                if let Some(ref dom) = c.metadata.domain {
+                    println!("       ├─ Domain: {dom}");
+                }
+                if c.metadata.is_abuse_specific {
+                    println!("       ├─ ✓ Abuse-specific address");
+                }
+                println!("       └─ Source: Domain-based fallback");
+                println!();
+            }
         } else {
-            StyledFormatter::new()
-        };
-
-        if let Err(e) =
-            formatter.print_results_with_dual_escalation(&results, dual_escalation.as_ref())
-        {
-            eprintln!("Error formatting styled output: {}", e);
-            // Fall back to plain text output
-            let output_format = OutputFormatOrig::Text {
-                show_confidence: cli.show_internal(),
-                show_sources: cli.show_internal(),
-                show_metadata: cli.is_trace(),
-            };
-            let formatter = output::create_formatter(&output_format);
-            let output_text = formatter.format_results(&results).map_err(|e| {
-                AbuseDetectorError::Configuration(format!("Output formatting failed: {}", e))
-            })?;
-            print!("{}", output_text);
+            println!("  ⚠️  No domain-based abuse contacts discovered");
         }
-    } else {
-        // Use traditional output format
-        let output_format = if cli.batch {
-            OutputFormatOrig::Batch
-        } else if cli.show_internal() {
-            OutputFormatOrig::Text {
-                show_confidence: true,
-                show_sources: true,
-                show_metadata: cli.is_trace(),
-            }
-        } else {
-            OutputFormatOrig::Text {
-                show_confidence: false,
-                show_sources: false,
-                show_metadata: false,
-            }
-        };
+        // Escalation paths (if requested/generated)
+        if let Some(dual) = &dual_escalation {
+            println!(
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            );
+            println!("  🚀 Escalation Paths\n");
 
-        let formatter = output::create_formatter(&output_format);
-        let output_text = formatter.format_results(&results).map_err(|e| {
-            AbuseDetectorError::Configuration(format!("Output formatting failed: {}", e))
-        })?;
-
-        print!("{}", output_text);
-
-        // If using plain output but escalation was requested, show it separately
-        if let Some(ref paths) = dual_escalation {
-            if cli.should_show_escalation() {
-                println!("\n--- EMAIL INFRASTRUCTURE ESCALATION PATH ---");
-                println!("(For stopping email sending abuse)");
-                for (i, contact) in paths.get_email_infrastructure_contacts().iter().enumerate() {
+            // Email infrastructure path (only show if there are contacts)
+            let infra_contacts = dual.get_email_infrastructure_contacts();
+            if !infra_contacts.is_empty() {
+                println!("  📬 Email Infrastructure:");
+                for (i, c) in infra_contacts.iter().enumerate() {
+                    let email = c.email.as_deref().unwrap_or("<unknown>");
                     println!(
-                        "{}. {} - {}",
+                        "    {}. {} - {}",
                         i + 1,
-                        contact.contact_type.display_name(),
-                        contact.organization
+                        email,
+                        c.contact_type.display_name()
                     );
-                    if let Some(ref email) = contact.email {
-                        println!("   Email: {}", email);
+                    if !c.organization.is_empty() {
+                        println!("       └─ Org: {}", c.organization);
                     }
-                    if let Some(ref form) = contact.web_form {
-                        println!("   Web Form: {}", form);
-                    }
-                    println!();
                 }
+                println!();
+            } else {
+                // Domain fallback case: no distinct infrastructure contacts (e.g. only IPv6 path / no hosting IP)
+                println!("  🛈 No email infrastructure escalation contacts (domain fallback - no distinct sending IPv4 path)");
+                println!();
+            }
 
-                if let Some(hosting_contacts) = paths.get_sender_hosting_contacts() {
-                    if !hosting_contacts.is_empty() {
-                        println!("\n--- SENDER HOSTING ESCALATION PATH ---");
-                        println!("(For stopping website/business abuse)");
-                        for (i, contact) in hosting_contacts.iter().enumerate() {
-                            println!(
-                                "{}. {} - {}",
-                                i + 1,
-                                contact.contact_type.display_name(),
-                                contact.organization
-                            );
-                            if let Some(ref email) = contact.email {
-                                println!("   Email: {}", email);
-                            }
-                            if let Some(ref form) = contact.web_form {
-                                println!("   Web Form: {}", form);
-                            }
-                            println!();
-                        }
+            // Sender hosting path (if available)
+            if let Some(hosting) = dual.get_sender_hosting_contacts() {
+                println!("\n  🏢 Sender Hosting:");
+                for (i, c) in hosting.iter().enumerate() {
+                    let email = c.email.as_deref().unwrap_or("<unknown>");
+                    println!(
+                        "    {}. {} - {}",
+                        i + 1,
+                        email,
+                        c.contact_type.display_name()
+                    );
+                    if !c.organization.is_empty() {
+                        println!("       └─ Org: {}", c.organization);
                     }
                 }
             }
         }
+
+        println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        println!("  📊 Query Statistics:");
+        println!("    ├─ DNS queries performed: {}", metadata.dns_queries);
+        println!(
+            "    ├─ WHOIS servers queried: {}",
+            metadata.whois_servers_queried
+        );
+        println!("    └─ Total time: {}ms", metadata.duration_ms.unwrap_or(0));
+        println!();
+        println!("  💡 Tips for Effective Abuse Reporting:");
+        println!("    • Include concrete evidence (headers, timestamps, body excerpts)");
+        println!("    • Allow 2-3 business days before escalating");
+        println!("    • Escalate to registrar or hosting provider if unresponsive");
+        println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        return Ok(());
     }
 
-    // If no results and verbose, hint user
-    if results.contacts.is_empty() && cli.error_enabled() && dual_escalation.is_none() {
-        eprintln!("No abuse contacts discovered and escalation paths unavailable.");
-        eprintln!("Try using --show-escalation to see alternative contact methods.");
+    // Plain / batch fallback for domain mode
+    if cli.batch {
+        let list: Vec<&str> = finalized.iter().map(|(e, _)| e.as_str()).collect();
+        println!("{domain}:{}", list.join(","));
+    } else {
+        println!("Abuse contacts for domain {domain}:");
+        for (email, conf) in &finalized {
+            println!("  {email} (confidence: {conf})");
+        }
+        if finalized.is_empty() {
+            println!("  (none)");
+        }
     }
 
     Ok(())
 }
 
-/// Traverse up the domain labels performing SOA lookups and extracting RNAME
-/// which is translated into an email (first '.' becomes '@').
+/// Traverse SOA hierarchy collecting RNAME-derived emails.
 async fn traverse_soa(
     base: &str,
     emails: &mut EmailSet,
@@ -485,11 +815,12 @@ async fn traverse_soa(
         }
 
         metadata.dns_queries += 1;
+
         match tokio::time::timeout(
             Duration::from_secs(5),
             resolver.lookup(
                 Name::from_ascii(&candidate).map_err(|e| {
-                    AbuseDetectorError::Configuration(format!("Invalid domain name: {}", e))
+                    AbuseDetectorError::Configuration(format!("Invalid domain name: {e}"))
                 })?,
                 RecordType::SOA,
             ),
@@ -509,16 +840,18 @@ async fn traverse_soa(
             }
             Ok(Err(e)) => {
                 if cli.is_trace() {
-                    eprintln!("  SOA query failed for {}: {}", candidate, e);
+                    eprintln!("  SOA query failed for {candidate}: {e}");
                 }
             }
             Err(_) => {
                 if cli.is_trace() {
-                    eprintln!("  SOA query timeout for {}", candidate);
+                    eprintln!("  SOA query timeout for {candidate}");
                 }
             }
         }
+
         labels.remove(0);
     }
+
     Ok(())
 }

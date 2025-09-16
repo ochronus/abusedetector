@@ -38,8 +38,15 @@ impl EmailSet {
         *entry = entry.saturating_add(delta);
     }
 
-    // Merge another EmailSet (sums confidence, saturating on u32::MAX).
-    // absorb removed (was unused)
+    /// Merge another EmailSet into this one (sums confidence, saturating on u32::MAX).
+    #[allow(dead_code)]
+    pub fn merge_from(&mut self, other: &EmailSet) {
+        for (email, confidence) in &other.map {
+            let entry = self.map.entry(email.clone()).or_insert(0);
+            *entry = entry.saturating_add(*confidence);
+        }
+    }
+
     /// Strip trailing '.' (common artefact when parsing some whois / DNS outputs)
     /// and merge duplicates post-normalization.
     pub fn normalize(&mut self) {

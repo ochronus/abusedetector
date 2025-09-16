@@ -74,9 +74,7 @@
     "CloudProviderInfo": {
       "description": "Cloud provider information",
       "type": "object",
-      "required": [
-        "provider"
-      ],
+      "required": ["provider"],
       "properties": {
         "provider": {
           "description": "Provider name (e.g., \"Amazon Web Services\")",
@@ -84,17 +82,11 @@
         },
         "region": {
           "description": "Cloud region (if identifiable)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "service": {
           "description": "Specific service (if identifiable)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         }
       }
     },
@@ -125,10 +117,7 @@
         },
         "domain": {
           "description": "Domain the contact is associated with",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "email": {
           "description": "The email address",
@@ -161,16 +150,11 @@
     "ContactMetadata": {
       "description": "Additional contact metadata",
       "type": "object",
-      "required": [
-        "notes"
-      ],
+      "required": ["notes"],
       "properties": {
         "country": {
           "description": "Country code",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "notes": {
           "description": "Additional notes",
@@ -181,10 +165,7 @@
         },
         "organization": {
           "description": "Organization name",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         }
       }
     },
@@ -194,15 +175,11 @@
         {
           "description": "WHOIS database lookup",
           "type": "object",
-          "required": [
-            "whois"
-          ],
+          "required": ["whois"],
           "properties": {
             "whois": {
               "type": "object",
-              "required": [
-                "server"
-              ],
+              "required": ["server"],
               "properties": {
                 "server": {
                   "description": "WHOIS server queried",
@@ -216,15 +193,11 @@
         {
           "description": "DNS SOA record RNAME",
           "type": "object",
-          "required": [
-            "dns_soa"
-          ],
+          "required": ["dns_soa"],
           "properties": {
             "dns_soa": {
               "type": "object",
-              "required": [
-                "domain"
-              ],
+              "required": ["domain"],
               "properties": {
                 "domain": {
                   "description": "Domain queried",
@@ -238,23 +211,17 @@
         {
           "description": "abuse.net database",
           "type": "string",
-          "enum": [
-            "abuse_net"
-          ]
+          "enum": ["abuse_net"]
         },
         {
           "description": "Hostname-based heuristics",
           "type": "string",
-          "enum": [
-            "hostname_heuristic"
-          ]
+          "enum": ["hostname_heuristic"]
         },
         {
           "description": "Multiple sources confirm this contact",
           "type": "string",
-          "enum": [
-            "multiple_confirmed"
-          ]
+          "enum": ["multiple_confirmed"]
         }
       ]
     },
@@ -264,44 +231,32 @@
         {
           "description": "Direct abuse contact",
           "type": "string",
-          "enum": [
-            "abuse"
-          ]
+          "enum": ["abuse"]
         },
         {
           "description": "Security contact",
           "type": "string",
-          "enum": [
-            "security"
-          ]
+          "enum": ["security"]
         },
         {
           "description": "Hostmaster contact",
           "type": "string",
-          "enum": [
-            "hostmaster"
-          ]
+          "enum": ["hostmaster"]
         },
         {
           "description": "Administrative contact",
           "type": "string",
-          "enum": [
-            "admin"
-          ]
+          "enum": ["admin"]
         },
         {
           "description": "Technical contact",
           "type": "string",
-          "enum": [
-            "tech"
-          ]
+          "enum": ["tech"]
         },
         {
           "description": "Generic contact",
           "type": "string",
-          "enum": [
-            "generic"
-          ]
+          "enum": ["generic"]
         }
       ]
     },
@@ -311,42 +266,29 @@
         {
           "description": "Highly effective, fast response",
           "type": "string",
-          "enum": [
-            "high"
-          ]
+          "enum": ["high"]
         },
         {
           "description": "Moderately effective",
           "type": "string",
-          "enum": [
-            "medium"
-          ]
+          "enum": ["medium"]
         },
         {
           "description": "Lower effectiveness or slow response",
           "type": "string",
-          "enum": [
-            "low"
-          ]
+          "enum": ["low"]
         },
         {
           "description": "Effectiveness unknown",
           "type": "string",
-          "enum": [
-            "unknown"
-          ]
+          "enum": ["unknown"]
         }
       ]
     },
     "EscalationContactInfo": {
       "description": "Escalation contact with level and metadata",
       "type": "object",
-      "required": [
-        "contact_type",
-        "level",
-        "notes",
-        "organization"
-      ],
+      "required": ["contact_type", "level", "notes", "organization"],
       "properties": {
         "contact_type": {
           "description": "Type of escalation contact",
@@ -369,10 +311,7 @@
         },
         "email": {
           "description": "Email contact (if available)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "level": {
           "description": "Escalation level (0 = first contact, 1 = second, etc.)",
@@ -393,17 +332,11 @@
         },
         "response_expectation": {
           "description": "Expected response time",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "web_form": {
           "description": "Web form URL (if available)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         }
       }
     },
@@ -413,69 +346,49 @@
         {
           "description": "Direct abuse contact from original source",
           "type": "string",
-          "enum": [
-            "DirectAbuse"
-          ]
+          "enum": ["DirectAbuse"]
         },
         {
           "description": "Hosting provider for the domain/service",
           "type": "string",
-          "enum": [
-            "HostingProvider"
-          ]
+          "enum": ["HostingProvider"]
         },
         {
           "description": "Domain name registrar",
           "type": "string",
-          "enum": [
-            "DomainRegistrar"
-          ]
+          "enum": ["DomainRegistrar"]
         },
         {
           "description": "Autonomous System Number owner (ISP/hosting company)",
           "type": "string",
-          "enum": [
-            "AsnOwner"
-          ]
+          "enum": ["AsnOwner"]
         },
         {
           "description": "Regional Internet Registry (ARIN, RIPE, etc.)",
           "type": "string",
-          "enum": [
-            "RegionalRegistry"
-          ]
+          "enum": ["RegionalRegistry"]
         },
         {
           "description": "Cloud provider (AWS, Azure, GCP, etc.)",
           "type": "string",
-          "enum": [
-            "CloudProvider"
-          ]
+          "enum": ["CloudProvider"]
         },
         {
           "description": "Parent organization (university, corporation)",
           "type": "string",
-          "enum": [
-            "ParentOrganization"
-          ]
+          "enum": ["ParentOrganization"]
         },
         {
           "description": "Legal/regulatory authority",
           "type": "string",
-          "enum": [
-            "LegalAuthority"
-          ]
+          "enum": ["LegalAuthority"]
         }
       ]
     },
     "EscalationPath": {
       "description": "A single escalation path with prioritized contacts",
       "type": "object",
-      "required": [
-        "contacts",
-        "description",
-        "purpose"
-      ],
+      "required": ["contacts", "description", "purpose"],
       "properties": {
         "contacts": {
           "description": "Ordered list of escalation contacts (Level 0, 1, 2, etc.)",
@@ -511,34 +424,24 @@
         {
           "description": "Focus on email infrastructure",
           "type": "string",
-          "enum": [
-            "email_infrastructure"
-          ]
+          "enum": ["email_infrastructure"]
         },
         {
           "description": "Focus on sender hosting",
           "type": "string",
-          "enum": [
-            "sender_hosting"
-          ]
+          "enum": ["sender_hosting"]
         },
         {
           "description": "Use both paths simultaneously",
           "type": "string",
-          "enum": [
-            "dual"
-          ]
+          "enum": ["dual"]
         }
       ]
     },
     "EscalationPaths": {
       "description": "Escalation paths for when primary contacts don't respond",
       "type": "object",
-      "required": [
-        "email_infrastructure",
-        "generated_at",
-        "strategy"
-      ],
+      "required": ["email_infrastructure", "generated_at", "strategy"],
       "properties": {
         "email_infrastructure": {
           "description": "Email infrastructure escalation (for stopping email sending)",
@@ -612,25 +515,15 @@
     "InputInfo": {
       "description": "Information about what was analyzed",
       "type": "object",
-      "required": [
-        "input_method",
-        "ip_address",
-        "ip_source"
-      ],
+      "required": ["input_method", "ip_address", "ip_source"],
       "properties": {
         "eml_file": {
           "description": "EML file path (if applicable)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "hostname": {
           "description": "Reverse DNS hostname (if available)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "input_method": {
           "description": "Original input method",
@@ -641,12 +534,12 @@
           ]
         },
         "ip_address": {
-          "description": "The IP address that was analyzed",
+          "description": "The IPv4 address that was analyzed. In domain-fallback mode (no public IPv4 found in EML) this is set to 0.0.0.0 as a placeholder.",
           "type": "string",
           "format": "ipv4"
         },
         "ip_source": {
-          "description": "How the IP was obtained",
+          "description": "How the IP address was obtained. In domain-fallback mode (no public IPv4 found) header_field may be 'Domain fallback (no IPv4 found)' and ip_address will be 0.0.0.0.",
           "allOf": [
             {
               "$ref": "#/definitions/IpSource"
@@ -655,10 +548,7 @@
         },
         "sender_domain": {
           "description": "Sender domain extracted from email (if applicable)",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         }
       }
     },
@@ -668,16 +558,12 @@
         {
           "description": "Direct IP address input",
           "type": "string",
-          "enum": [
-            "direct_ip"
-          ]
+          "enum": ["direct_ip"]
         },
         {
           "description": "EML file analysis",
           "type": "string",
-          "enum": [
-            "eml_file"
-          ]
+          "enum": ["eml_file"]
         }
       ]
     },
@@ -687,23 +573,16 @@
         {
           "description": "Directly provided by user",
           "type": "string",
-          "enum": [
-            "direct_input"
-          ]
+          "enum": ["direct_input"]
         },
         {
           "description": "Extracted from email header",
           "type": "object",
-          "required": [
-            "email_header"
-          ],
+          "required": ["email_header"],
           "properties": {
             "email_header": {
               "type": "object",
-              "required": [
-                "header_field",
-                "priority"
-              ],
+              "required": ["header_field", "priority"],
               "properties": {
                 "header_field": {
                   "description": "Specific header field used",
@@ -728,19 +607,13 @@
       "properties": {
         "asn": {
           "description": "Autonomous System Number",
-          "type": [
-            "integer",
-            "null"
-          ],
+          "type": ["integer", "null"],
           "format": "uint32",
           "minimum": 0.0
         },
         "asn_name": {
           "description": "ASN name/description",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "cloud_provider": {
           "description": "Cloud provider information",
@@ -755,17 +628,11 @@
         },
         "country": {
           "description": "Country of registration",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "registry": {
           "description": "Regional Internet Registry",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         }
       }
     },
@@ -927,30 +794,22 @@
         {
           "description": "Excellent results with high confidence",
           "type": "string",
-          "enum": [
-            "excellent"
-          ]
+          "enum": ["excellent"]
         },
         {
           "description": "Good results with reasonable confidence",
           "type": "string",
-          "enum": [
-            "good"
-          ]
+          "enum": ["good"]
         },
         {
           "description": "Fair results with some limitations",
           "type": "string",
-          "enum": [
-            "fair"
-          ]
+          "enum": ["fair"]
         },
         {
           "description": "Poor results with low confidence",
           "type": "string",
-          "enum": [
-            "poor"
-          ]
+          "enum": ["poor"]
         }
       ]
     },

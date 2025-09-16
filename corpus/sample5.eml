@@ -135,35 +135,11 @@ DomainKey-Signature: a=rsa-sha1; c=nofws; q=dns; s=dkim; d=bellafique.com;
 Reply-To: mr.nasir@falconsiinv.com
 From: Mr.Nasir<avah@bellafique.com>
 To: xxx@xxx.xxx
-Subject: Project Funding
+Subject: DEMO SUBJECT
 Date: 15 Sep 2025 21:03:56 -0700
 Message-ID: <20250915210356.13C29D6B04C9D76D@bellafique.com>
 MIME-Version: 1.0
 Content-Type: text/html
 Content-Transfer-Encoding: quoted-printable
 
-<!DOCTYPE HTML>
-
-<html><head><title></title>
-<meta http-equiv=3D"X-UA-Compatible" content=3D"IE=3Dedge">
-</head>
-<body style=3D"margin: 0.4em;">
-<p>
-I hope this message finds you well. I wanted to inquire if you have any ong=
-oing or upcoming projects in need of funding. At Falcons Investment, we spe=
-cialize in sourcing capital for unique business development opportunities a=
-nd work closely with established companies globally to bring these opportun=
-ities to life. We are currently offering investment loans with a competitiv=
-e 2.5% annual interest rate, designed for long-term projects that can gener=
-ate up to 10% ROI over the investment period.<br>
-&nbsp;<br>If our financing terms align with your organization&#8217;s needs=
-, we would be delighted to explore potential collaboration. Regardless of p=
-roject type or location, we consider proposals from all sectors, provided t=
-hey meet our board's approval after review. If you're interested in moving =
-forward, please send us your business plan for a detailed evaluation.<br>&n=
-bsp;<br>Best wishes,&nbsp; <br>Mr.Nasir<br>Senior Consultant<br>Falcons Inv=
-estment
-</p>
-
-
-</body></html>
+DEMO BODY

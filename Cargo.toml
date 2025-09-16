@@ -19,6 +19,9 @@ rand = "0.8"
 anstyle = "1.0"
 reqwest = { version = "0.12", features = ["json"] }
 atty = "0.2"
+futures = "0.3"
+ipnetwork = "0.20"
+lazy_static = "1.4"
 
 [dev-dependencies]
 tempfile = "3.0"

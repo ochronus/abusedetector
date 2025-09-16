@@ -31,7 +31,7 @@ pub async fn simple_whois(server: &str, query: &str, to: Duration) -> Result<Str
     let line = format!("{query}\r\n");
     timeout(to, stream.write_all(line.as_bytes()))
         .await
-        .map_err(|_| anyhow!("write timeout to {server}"))??;
+        .map_err(|_| anyhow!("write timeout to {{server}}"))??;
 
     // Read whole response
     let mut buf = Vec::new();

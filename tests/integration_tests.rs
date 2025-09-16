@@ -386,13 +386,16 @@ fn test_eml_file_not_found() {
         .output()
         .expect("Failed to execute binary");
 
-    // Should exit successfully but with error message
-    assert!(output.status.success());
+    // Now expected to exit with non-zero status on unreadable EML
+    assert!(
+        !output.status.success(),
+        "Process should fail for missing EML file"
+    );
 
     let stderr = str::from_utf8(&output.stderr).unwrap();
     assert!(
         stderr.contains("Error extracting IP"),
-        "Should report EML reading error"
+        "Should report EML reading error; stderr was: {stderr}"
     );
 }
 

@@ -287,7 +287,9 @@ impl EscalationPath {
         // 3. Check reverse DNS patterns
 
         // For now, we'll do basic reverse DNS pattern matching
-        if let Ok(Some(hostname)) = crate::netutil::reverse_dns(self.ip, false).await {
+        if let Ok(Some(hostname)) =
+            crate::netutil::reverse_dns(std::net::IpAddr::V4(self.ip), false).await
+        {
             let hostname_lower = hostname.to_lowercase();
 
             if hostname_lower.contains("amazonaws.com") || hostname_lower.contains("aws") {

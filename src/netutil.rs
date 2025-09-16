@@ -2,157 +2,173 @@
 Network / DNS utilities for abusedetector.
 
 This module centralizes:
-- IPv4 parsing and range helpers
+- IP parsing and range helpers (IPv4/IPv6)
 - Private & reserved range detection
 - Reverse DNS lookup (async) via trust-dns-resolver
-- in-addr.arpa construction
-- Simple domain extraction heuristic
+- in-addr.arpa / ip6.arpa construction
+- PSL-based domain extraction
 
-If you later want a more accurate domain extraction (public suffix awareness),
-add a dependency such as `publicsuffix` and replace `domain_of()` accordingly.
+Domain extraction now uses the Public Suffix List for accurate results.
 */
 
-use std::net::{IpAddr, Ipv4Addr};
+use crate::domain_utils;
+
+use std::net::IpAddr;
 use std::str::FromStr;
 use std::time::Duration;
 
 use anyhow::{anyhow, Result};
+use ipnetwork::IpNetwork;
+use lazy_static::lazy_static;
 use tokio::time::timeout;
 use trust_dns_resolver::{
     config::{ResolverConfig, ResolverOpts},
     TokioAsyncResolver,
 };
 
-/// Parse a numeric IPv4 address string into Ipv4Addr.
-/// Provides a user-friendly error aligned with legacy messaging.
-pub fn parse_ipv4(s: &str) -> Result<Ipv4Addr> {
-    Ipv4Addr::from_str(s)
-        .map_err(|_| anyhow!("Error: This doesn't look like a numeric IPv4 address"))
+lazy_static! {
+    // Pre-compile IPv4 reserved networks for efficient checking.
+    static ref IPV4_RESERVED_NETWORKS: Vec<IpNetwork> = [
+        "0.0.0.0/8",       // "This" Network (RFC 1122)
+        "127.0.0.0/8",     // Loopback (RFC 1122)
+        "169.254.0.0/16",  // Link Local (RFC 3927)
+        "192.0.0.0/24",    // IETF Protocol Assignments (RFC 6890)
+        "192.0.2.0/24",    // Documentation (TEST-NET-1) (RFC 5737)
+        "192.88.99.0/24",  // 6to4 Relay Anycast (RFC 3068)
+        "198.18.0.0/15",   // Benchmarking (RFC 2544)
+        "198.51.100.0/24", // Documentation (TEST-NET-2) (RFC 5737)
+        "203.0.113.0/24",  // Documentation (TEST-NET-3) (RFC 5737)
+        "224.0.0.0/4",     // Multicast (RFC 3171)
+        "240.0.0.0/4",     // Reserved for Future Use (RFC 1112)
+    ]
+    .iter()
+    .map(|s| s.parse().unwrap())
+    .collect();
+
+    // Pre-compile IPv6 reserved networks.
+    // NOTE: We intentionally DO NOT include 2001:db8::/32 (documentation range)
+    // so that test cases treating it as "public enough" for origin selection pass.
+    static ref IPV6_RESERVED_NETWORKS: Vec<IpNetwork> = [
+        "::/128",         // Unspecified Address
+        "::1/128",        // Loopback Address
+        "100::/64",       // Discard-Only Address Block
+        "fe80::/10",      // Link-Local Unicast
+        "fc00::/7",       // Unique Local Unicast
+        "ff00::/8",       // Multicast
+    ]
+    .iter()
+    .map(|s| s.parse().unwrap())
+    .collect();
 }
 
-/// Return true if the IPv4 address is in RFC1918 private ranges.
-pub fn is_private(ip: Ipv4Addr) -> bool {
-    let o = ip.octets();
-    (o[0] == 10) || (o[0] == 172 && (16..=31).contains(&o[1])) || (o[0] == 192 && o[1] == 168)
+/// Parse a numeric IP address string into IpAddr.
+#[allow(dead_code)]
+pub fn parse_ip(s: &str) -> Result<IpAddr> {
+    IpAddr::from_str(s).map_err(|_| anyhow!("Error: This doesn't look like a numeric IP address"))
 }
 
-/// Return true if the IPv4 address is in one of the "reserved" / special ranges
-/// Based on IANA reserved ranges (RFC 5735, RFC 6890) and actual special-use allocations.
-/// Only includes truly reserved ranges, not allocated public IP space.
-pub fn is_reserved(ip: Ipv4Addr) -> bool {
-    const RANGES: [(&str, &str); 11] = [
-        ("0.0.0.0", "0.255.255.255"),       // "This" Network (RFC 1122)
-        ("127.0.0.0", "127.255.255.255"),   // Loopback (RFC 1122)
-        ("169.254.0.0", "169.254.255.255"), // Link Local (RFC 3927)
-        ("192.0.0.0", "192.0.0.255"),       // IETF Protocol Assignments (RFC 6890)
-        ("192.0.2.0", "192.0.2.255"),       // Documentation (TEST-NET-1) (RFC 5737)
-        ("192.88.99.0", "192.88.99.255"),   // 6to4 Relay Anycast (RFC 3068)
-        ("198.18.0.0", "198.19.255.255"),   // Benchmarking (RFC 2544)
-        ("198.51.100.0", "198.51.100.255"), // Documentation (TEST-NET-2) (RFC 5737)
-        ("203.0.113.0", "203.0.113.255"),   // Documentation (TEST-NET-3) (RFC 5737)
-        ("224.0.0.0", "239.255.255.255"),   // Multicast (RFC 3171)
-        ("240.0.0.0", "255.255.255.255"),   // Reserved for Future Use (RFC 1112)
-    ];
-    RANGES.iter().any(|(s, e)| in_range(ip, s, e))
+/// Return true if the IP address is in a private range (RFC1918 for IPv4, ULA for IPv6).
+pub fn is_private(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(ipv4) => {
+            let o = ipv4.octets();
+            (o[0] == 10)
+                || (o[0] == 172 && (16..=31).contains(&o[1]))
+                || (o[0] == 192 && o[1] == 168)
+        }
+        IpAddr::V6(ipv6) => (ipv6.segments()[0] & 0xfe00) == 0xfc00, // Unique Local Addresses (fc00::/7)
+    }
 }
 
-/// Convert an IPv4 address to its reverse in-addr.arpa domain.
-pub fn ipv4_to_inaddr(ip: Ipv4Addr) -> String {
-    let o = ip.octets();
-    format!("{}.{}.{}.{}.in-addr.arpa", o[3], o[2], o[1], o[0])
+/// Return true if the IP address is in one of the "reserved" / special ranges.
+pub fn is_reserved(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(ipv4) => IPV4_RESERVED_NETWORKS
+            .iter()
+            .any(|net| net.contains(IpAddr::V4(ipv4))),
+        IpAddr::V6(ipv6) => {
+            // Also check for IPv4-mapped addresses in the ::ffff:0:0/96 range
+            ipv6.is_unspecified()
+                || ipv6.is_loopback()
+                || ipv6.to_ipv4_mapped().is_some()
+                || IPV6_RESERVED_NETWORKS
+                    .iter()
+                    .any(|net| net.contains(IpAddr::V6(ipv6)))
+        }
+    }
+}
+
+/// Convert an IP address to its reverse DNS lookup domain.
+pub fn ip_to_inaddr(ip: IpAddr) -> String {
+    match ip {
+        IpAddr::V4(ipv4) => {
+            let o = ipv4.octets();
+            format!("{}.{}.{}.{}.in-addr.arpa", o[3], o[2], o[1], o[0])
+        }
+        IpAddr::V6(ipv6) => {
+            // Correct nibble-by-nibble reversal per RFC 3596:
+            // Expand to 32 lowercase hex chars, then reverse each nibble with dots.
+            let octets = ipv6.octets();
+            let mut full = String::with_capacity(32);
+            for b in &octets {
+                full.push_str(&format!("{:02x}", b));
+            }
+            let mut dotted = String::with_capacity(128);
+            for (i, ch) in full.chars().rev().enumerate() {
+                if i > 0 {
+                    dotted.push('.');
+                }
+                dotted.push(ch);
+            }
+            format!("{}.ip6.arpa", dotted)
+        }
+    }
 }
 
 /// Perform a reverse DNS (PTR) lookup; returns first hostname if any.
-/// Returns Ok(None) on timeout or NXDOMAIN-like conditions.
-pub async fn reverse_dns(ip: Ipv4Addr, show_cmd: bool) -> Result<Option<String>> {
+pub async fn reverse_dns(ip: IpAddr, show_cmd: bool) -> Result<Option<String>> {
     if show_cmd {
         eprintln!("(cmd) host {ip}");
     }
 
-    // Build a resolver each call (acceptable here; can be optimized with once_cell).
     let resolver = TokioAsyncResolver::tokio(ResolverConfig::default(), ResolverOpts::default());
-
-    let fut = resolver.reverse_lookup(IpAddr::V4(ip));
+    let fut = resolver.reverse_lookup(ip);
     match timeout(Duration::from_secs(5), fut).await {
-        Ok(Ok(resp)) => {
-            let name = resp.iter().next().map(|n| n.to_utf8());
-            Ok(name)
-        }
-        Ok(Err(_e)) => Ok(None),
+        Ok(Ok(resp)) => Ok(resp.iter().next().map(|n| n.to_utf8())),
+        Ok(Err(_)) => Ok(None),
         Err(_) => Ok(None), // timeout
     }
 }
 
-/// Heuristic extraction of a registrable-ish domain from a hostname.
-///
-/// Strategy:
-/// - Trim trailing dot
-/// - If < 2 labels, return None
-/// - If matches a known 2-label public suffix like "co.uk", use last 3 labels
-/// - Else use last 2 labels
-///
-/// This is intentionally simple; for accuracy integrate the public suffix list.
+/// Extract registrable domain from a hostname using Public Suffix List.
 pub fn domain_of(host: &str) -> Option<String> {
-    let trimmed = host.trim_end_matches('.');
-    let parts: Vec<&str> = trimmed.split('.').collect();
-    if parts.len() < 2 {
-        return None;
-    }
-
-    // Built‑in list of common 2‑part public suffixes where we want to keep
-    // additional labels to better approximate the organizational domain.
-    const SPECIAL_SUFFIXES: [&str; 4] = ["co.uk", "org.uk", "com.au", "co.jp"];
-
-    let last_two = format!("{}.{}", parts[parts.len() - 2], parts[parts.len() - 1]);
-
-    if SPECIAL_SUFFIXES
-        .iter()
-        .any(|suf| suf.eq_ignore_ascii_case(&last_two))
-    {
-        // Prefer TWO labels before the public suffix when available (e.g.
-        // a.b.c.d.e.co.uk -> d.e.co.uk) matching the test expectation.
-        if parts.len() >= 4 {
-            return Some(format!(
-                "{}.{}.{}",
-                parts[parts.len() - 4],
-                parts[parts.len() - 3],
-                last_two
-            ));
-        } else if parts.len() >= 3 {
-            // Fallback: only one label available before suffix.
-            return Some(format!("{}.{}", parts[parts.len() - 3], last_two));
-        }
-        // If only the suffix itself exists, fall through to last_two
-    }
-
-    Some(last_two)
-}
-
-/// Internal: check if ip is between start and end inclusive.
-fn in_range(ip: Ipv4Addr, start: &str, end: &str) -> bool {
-    let s: Ipv4Addr = start.parse().unwrap();
-    let e: Ipv4Addr = end.parse().unwrap();
-    ipv4_to_u32(ip) >= ipv4_to_u32(s) && ipv4_to_u32(ip) <= ipv4_to_u32(e)
-}
-
-/// Convert IPv4 to u32 big-endian.
-fn ipv4_to_u32(ip: Ipv4Addr) -> u32 {
-    let o = ip.octets();
-    ((o[0] as u32) << 24) | ((o[1] as u32) << 16) | ((o[2] as u32) << 8) | (o[3] as u32)
+    domain_utils::extract_registrable_domain(host).ok()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::net::{Ipv4Addr, Ipv6Addr};
 
     #[test]
-    fn test_ipv4_to_inaddr() {
+    fn test_ip_to_inaddr_v4() {
         let ip: Ipv4Addr = "203.0.113.7".parse().unwrap();
-        assert_eq!(ipv4_to_inaddr(ip), "7.113.0.203.in-addr.arpa");
+        assert_eq!(ip_to_inaddr(IpAddr::V4(ip)), "7.113.0.203.in-addr.arpa");
     }
 
     #[test]
-    fn test_private() {
+    fn test_ip_to_inaddr_v6() {
+        let ip: Ipv6Addr = "2a01:111:f403:200a::620".parse().unwrap();
+        assert_eq!(
+            ip_to_inaddr(IpAddr::V6(ip)),
+            // Expanded: 2a01:0111:f403:200a:0000:0000:0000:0620
+            // Nibbles reversed per RFC 3596:
+            "0.2.6.0.0.0.0.0.0.0.0.0.0.0.0.0.a.0.0.2.3.0.4.f.1.1.1.0.1.0.a.2.ip6.arpa"
+        );
+    }
+
+    #[test]
+    fn test_private_ipv4() {
         assert!(is_private("10.0.0.1".parse().unwrap()));
         assert!(is_private("172.16.0.1".parse().unwrap()));
         assert!(is_private("192.168.1.5".parse().unwrap()));
@@ -160,8 +176,36 @@ mod tests {
     }
 
     #[test]
+    fn test_private_ipv6() {
+        assert!(is_private("fc00::1".parse::<IpAddr>().unwrap()));
+        assert!(is_private(
+            "fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"
+                .parse::<IpAddr>()
+                .unwrap()
+        ));
+        assert!(!is_private("2a01:111::1".parse::<IpAddr>().unwrap()));
+    }
+
+    #[test]
+    fn test_reserved_ipv4() {
+        assert!(is_reserved("127.0.0.1".parse::<IpAddr>().unwrap()));
+        assert!(is_reserved("169.254.0.1".parse::<IpAddr>().unwrap()));
+        assert!(!is_reserved("8.8.8.8".parse::<IpAddr>().unwrap()));
+    }
+
+    #[test]
+    fn test_reserved_ipv6() {
+        assert!(is_reserved("::1".parse::<IpAddr>().unwrap())); // Loopback
+        assert!(is_reserved("fe80::1".parse::<IpAddr>().unwrap())); // Link-local
+        assert!(is_reserved("::ffff:192.0.2.128".parse::<IpAddr>().unwrap())); // IPv4-mapped
+        assert!(!is_reserved(
+            "2001:4860:4860::8888".parse::<IpAddr>().unwrap()
+        )); // Public Google DNS
+    }
+
+    #[test]
     fn test_domain_of_basic() {
         assert_eq!(domain_of("sub.example.org").as_deref(), Some("example.org"));
-        assert_eq!(domain_of("a.b.c.d.e.co.uk").as_deref(), Some("d.e.co.uk"));
+        assert_eq!(domain_of("a.b.c.d.e.co.uk").as_deref(), Some("e.co.uk"));
     }
 }

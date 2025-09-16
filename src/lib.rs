@@ -15,11 +15,11 @@
 //! use abusedetector::netutil::{is_private, is_reserved};
 //!
 //! // Extract IP from EML file
-//! let ip = parse_eml_origin_ip_from_path("message.eml")?;
+//! let result = parse_eml_origin_ip_from_path("message.eml")?;
 //!
 //! // Check if IP is usable for abuse reporting
-//! if !is_private(ip) && !is_reserved(ip) {
-//!     println!("Public IP suitable for abuse reporting: {}", ip);
+//! if !is_private(result.ip) && !is_reserved(result.ip) {
+//!     println!("Public IP suitable for abuse reporting: {} (source: {})", result.ip, result.source);
 //! }
 //! # Ok::<(), Box<dyn std::error::Error>>(())
 //! ```
@@ -27,6 +27,7 @@
 // Re-export all modules for library use
 pub mod cli;
 pub mod config;
+pub mod domain_utils;
 pub mod emails;
 pub mod eml;
 pub mod errors;
@@ -34,6 +35,7 @@ pub mod escalation;
 pub mod netutil;
 pub mod output;
 pub mod retry;
+pub mod structured_output;
 pub mod styled_output;
 pub mod whois;
 
@@ -41,7 +43,7 @@ pub mod whois;
 pub use emails::{EmailSet, FinalizeOptions};
 pub use errors::{AbuseDetectorError, Result};
 pub use escalation::{EscalationContactType, EscalationPath};
-pub use netutil::{is_private, is_reserved, parse_ipv4};
+pub use netutil::{is_private, is_reserved};
 pub use output::{AbuseContact, AbuseResults, ContactSource, OutputFormat};
 pub use styled_output::StyledFormatter;
 

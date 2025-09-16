@@ -64,7 +64,7 @@ pub struct OutputMetadata {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct InputInfo {
-    /// The IP address that was analyzed
+    /// The IP address that was analyzed (may be 0.0.0.0 in domain-fallback mode when no public IPv4 was found in EML headers)
     pub ip_address: Ipv4Addr,
 
     /// How the IP was obtained

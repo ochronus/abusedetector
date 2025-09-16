@@ -22,7 +22,7 @@ use clap::Parser;
     about = "Discover likely abuse reporting email addresses for an IPv4 address or an .eml message"
 )]
 pub struct Cli {
-    /// Target IPv4 address (numeric, e.g. 203.0.113.10). Required unless --eml or --generate-schema is provided.
+    /// Target IP address (IPv4, e.g., 203.0.113.10). Required unless --eml or --generate-schema is provided.
     #[arg(required_unless_present_any = ["eml", "generate_schema"], conflicts_with = "eml")]
     pub ip: Option<String>,
 

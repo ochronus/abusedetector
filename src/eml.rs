@@ -1,38 +1,47 @@
 //! EML (RFC 5322 / RFC 822 style) message parsing utilities.
 //!
-//! This module provides a lightweight parser to extract the *originating IPv4
-//! address* from an email message file (.eml). We intentionally avoid adding
-//! heavyweight MIME / message parsing dependencies and rely on a pragmatic
+//! This module provides a lightweight parser to extract the *originating IP
+//! address* (v4 or v6) from an email message file (.eml). We intentionally avoid
+//! adding heavyweight MIME / message parsing dependencies and rely on a pragmatic
 //! heuristic approach suitable for abuse reporting workflows.
 //!
 //! Strategy (ordered):
 //! 1. Look for an `X-Originating-IP:` style header (Outlook / some MTAs).
-//! 2. Collect all `Received:` headers, unfold continuations, and parse IPv4
+//! 2. Collect all `Received:` headers, unfold continuations, and parse IP
 //!    addresses in each. We ignore private / reserved ranges.
-//! 3. Return the *earliest* public IPv4 (i.e., the one from the **bottom-most**
-//!    Received header containing a public IP), falling back to the first public
+//! 3. Return the *earliest* public IP (i.e., the one from the **bottom-most**
+//!    `Received` header containing a public IP), falling back to the first public
 //!    one encountered if ordering is ambiguous.
 //!
 //! Limitations:
 //! - Does not validate SPF, DKIM, or ARC chains.
-//! - Does not attempt IPv6 extraction (could be added later).
 //! - Assumes the file uses UTF-8 or ASCII superset encoding.
 //!
-//! If no suitable public IPv4 is found, an error is returned.
+//! If no suitable public IP is found, an error is returned.
 
 use std::fs;
-use std::net::Ipv4Addr;
+use std::net::IpAddr;
 use std::path::Path;
-use std::str::FromStr;
 
 use anyhow::{anyhow, bail, Result};
 use regex::Regex;
 
 use crate::netutil::{is_private, is_reserved};
 
+/// A regex to find IPv4 or IPv6 addresses. This is a pragmatic choice and may
+/// not cover all edge cases of IPv6 representation, but is good enough for this
+/// tool's purpose.
+const IP_REGEX: &str = r"\b((?:[0-9]{1,3}(?:\.[0-9]{1,3}){3})|(?:[a-f0-9:]+:+[a-f0-9:.]+))\b";
+
+/// Result of IP extraction with source information
+#[derive(Debug, Clone)]
+pub struct IpExtractionResult {
+    pub ip: IpAddr,
+    #[allow(dead_code)]
+    pub source: String,
+}
+
 /// Extract the sender domain from an EML file's From header.
-///
-/// Returns the domain part of the From header (e.g., "carebrain.co" from "melissanash@carebrain.co")
 pub fn extract_sender_domain_from_path<P: AsRef<Path>>(path: P) -> Result<Option<String>> {
     let content = fs::read_to_string(&path)
         .map_err(|e| anyhow!("Failed to read {:?}: {e}", path.as_ref()))?;
@@ -41,17 +50,13 @@ pub fn extract_sender_domain_from_path<P: AsRef<Path>>(path: P) -> Result<Option
 
 /// Extract the sender domain from raw EML content.
 pub fn extract_sender_domain(content: &str) -> Option<String> {
-    // Get header block (stop at first blank line)
     let header_end = content.find("\n\n").unwrap_or(content.len());
     let headers_raw = &content[..header_end];
-
-    // Unfold headers
     let unfolded = unfold_headers(headers_raw);
 
-    // Look for From: header - try various patterns
     let from_patterns = [
-        r"(?im)^\s*From:\s*.*?<([^@]+@([^>]+))>", // "Name <email@domain.com>"
-        r"(?im)^\s*From:\s*([^@\s]+@([^\s]+))",   // "email@domain.com"
+        r"(?im)^\s*From:\s*.*?<([^@]+@([^>]+))>",
+        r"(?im)^\s*From:\s*([^@\s]+@([^\s]+))",
     ];
 
     for pattern in &from_patterns {
@@ -63,7 +68,6 @@ pub fn extract_sender_domain(content: &str) -> Option<String> {
                         .trim()
                         .trim_end_matches('>')
                         .to_lowercase();
-                    // Basic validation - should contain at least one dot
                     if domain.contains('.') && !domain.is_empty() {
                         return Some(domain);
                     }
@@ -71,92 +75,67 @@ pub fn extract_sender_domain(content: &str) -> Option<String> {
             }
         }
     }
-
     None
 }
 
-/// Extract the originating public IPv4 address from an on-disk `.eml` file.
-///
-/// Returns an error if:
-/// - The file cannot be read
-/// - No public IPv4 address can be confidently determined
-pub fn parse_eml_origin_ip_from_path<P: AsRef<Path>>(path: P) -> Result<Ipv4Addr> {
+/// Extract the originating public IP address from an on-disk `.eml` file.
+pub fn parse_eml_origin_ip_from_path<P: AsRef<Path>>(path: P) -> Result<IpExtractionResult> {
     let content = fs::read_to_string(&path)
         .map_err(|e| anyhow!("Failed to read {:?}: {e}", path.as_ref()))?;
     parse_eml_origin_ip(&content)
 }
 
-/// Extract the originating public IPv4 address from raw `.eml` content.
-///
-/// This function does not mutate input and performs a best-effort derivation.
-/// It may return an error if no public IPv4 is found.
-pub fn parse_eml_origin_ip(content: &str) -> Result<Ipv4Addr> {
-    // 1. Raw header block (stop at first blank line).
+/// Extract the originating public IP address from raw `.eml` content.
+pub fn parse_eml_origin_ip(content: &str) -> Result<IpExtractionResult> {
     let header_end = content.find("\n\n").unwrap_or(content.len());
     let headers_raw = &content[..header_end];
-
-    // 2. Unfold (RFC 5322: continuation lines start with WSP).
     let unfolded = unfold_headers(headers_raw);
 
-    // Helper to validate public IP
-    let is_public = |ip: Ipv4Addr| !is_private(ip) && !is_reserved(ip);
+    let is_public = |ip: IpAddr| !is_private(ip) && !is_reserved(ip);
 
-    // Priority 0: X-Mailgun-Sending-Ip
-    if let Some(ip) = extract_first_ipv4(
-        &unfolded,
-        r"(?im)^\s*X-Mailgun-Sending-Ip:\s*([0-9]{1,3}(?:\.[0-9]{1,3}){3})\s*$",
-        &is_public,
-    ) {
-        eprintln!("Detected originating IP: {ip} (source: X-Mailgun-Sending-Ip)");
-        return Ok(ip);
+    let ip_patterns = [
+        (
+            "X-Mailgun-Sending-Ip",
+            r"(?im)^\s*X-Mailgun-Sending-Ip:\s*([a-f0-9:.]+|[0-9.]{7,15})\s*$",
+        ),
+        (
+            "X-Spam-source",
+            r"(?im)^\s*X-Spam-source:.*?IP='([a-f0-9:.]+|[0-9.]{7,15})'",
+        ),
+        (
+            "Authentication-Results smtp.remote-ip",
+            r"(?im)smtp\.remote-ip=([a-f0-9:.]+|[0-9.]{7,15})",
+        ),
+        (
+            "Received-SPF client-ip",
+            r"(?im)^\s*Received-SPF:.*?client-ip=([a-f0-9:.]+|[0-9.]{7,15})",
+        ),
+    ];
+
+    for (source, pattern) in &ip_patterns {
+        if let Some(ip) = extract_first_ip(&unfolded, pattern, &is_public) {
+            eprintln!("Detected originating IP: {ip} (source: {source})");
+            return Ok(IpExtractionResult {
+                ip,
+                source: source.to_string(),
+            });
+        }
     }
 
-    // Priority 1: X-Spam-source IP='x.x.x.x'
-    if let Some(ip) = extract_first_ipv4(
-        &unfolded,
-        r"(?im)^\s*X-Spam-source:.*?IP='([0-9]{1,3}(?:\.[0-9]{1,3}){3})'",
-        &is_public,
-    ) {
-        eprintln!("Detected originating IP: {ip} (source: X-Spam-source)");
-        return Ok(ip);
+    if let Some(ip) = find_x_originating_ip(&unfolded, &is_public) {
+        let source = "X-Originating-IP".to_string();
+        eprintln!("Detected originating IP: {ip} (source: {source})");
+        return Ok(IpExtractionResult { ip, source });
     }
 
-    // Priority 2: Authentication-Results / ARC-Authentication-Results smtp.remote-ip=
-    if let Some(ip) = extract_first_ipv4(
-        &unfolded,
-        r"(?im)smtp\.remote-ip=([0-9]{1,3}(?:\.[0-9]{1,3}){3})",
-        &is_public,
-    ) {
-        eprintln!("Detected originating IP: {ip} (source: Authentication-Results smtp.remote-ip)");
-        return Ok(ip);
-    }
-
-    // Priority 3: Received-SPF client-ip=
-    if let Some(ip) = extract_first_ipv4(
-        &unfolded,
-        r"(?im)^\s*Received-SPF:.*?client-ip=([0-9]{1,3}(?:\.[0-9]{1,3}){3})",
-        &is_public,
-    ) {
-        eprintln!("Detected originating IP: {ip} (source: Received-SPF client-ip)");
-        return Ok(ip);
-    }
-
-    // Priority 4: X-Originating-IP (sometimes in form: [x.x.x.x] or x.x.x.x)
-    if let Some(ip) = find_x_originating_ip(&unfolded) {
-        eprintln!("Detected originating IP: {ip} (source: X-Originating-IP)");
-        return Ok(ip);
-    }
-
-    // Priority 5: Received headers parsing (fallback heuristic)
     let received_blocks = collect_received_headers(&unfolded);
     if received_blocks.is_empty() {
         bail!("No Received headers found and no higher-priority headers present.");
     }
 
-    // Collect all public IPs in chronological order (top = most recent, bottom = earliest)
-    let mut public_ips: Vec<Ipv4Addr> = Vec::new();
+    let mut public_ips: Vec<IpAddr> = Vec::new();
     for block in &received_blocks {
-        for ip in extract_ipv4s(block) {
+        for ip in extract_ips(block) {
             if is_public(ip) {
                 public_ips.push(ip);
             }
@@ -164,12 +143,9 @@ pub fn parse_eml_origin_ip(content: &str) -> Result<Ipv4Addr> {
     }
 
     if public_ips.is_empty() {
-        bail!("No public IPv4 addresses discovered in Received chain.");
+        bail!("No public IP addresses discovered in Received chain.");
     }
 
-    // Heuristic refinement:
-    // Prefer an IP whose associated hostname (in same Received line) contains known outbound provider keywords.
-    // This is intentionally lightweight; extend as needed.
     let provider_keywords = ["mailgun", "sendgrid", "amazonses", "sparkpost"];
     if let Some(provider_ip) = received_blocks
         .iter()
@@ -178,7 +154,7 @@ pub fn parse_eml_origin_ip(content: &str) -> Result<Ipv4Addr> {
             let block_lc = block.to_ascii_lowercase();
             provider_keywords.iter().find_map(|kw| {
                 if block_lc.contains(kw) {
-                    extract_ipv4s(block).into_iter().find(|ip| is_public(*ip))
+                    extract_ips(block).into_iter().find(|ip| is_public(*ip))
                 } else {
                     None
                 }
@@ -186,26 +162,30 @@ pub fn parse_eml_origin_ip(content: &str) -> Result<Ipv4Addr> {
         })
         .next()
     {
-        eprintln!("Detected originating IP: {provider_ip} (source: Received provider heuristic)");
-        return Ok(provider_ip);
+        let source = "Received provider heuristic".to_string();
+        eprintln!("Detected originating IP: {provider_ip} (source: {source})");
+        return Ok(IpExtractionResult {
+            ip: provider_ip,
+            source,
+        });
     }
 
-    // Otherwise choose earliest hop (last collected public IP).
     let chosen = *public_ips.last().unwrap();
-    eprintln!("Detected originating IP: {chosen} (source: Received fallback earliest hop)");
-    Ok(chosen)
+    let source = "Received fallback earliest hop".to_string();
+    eprintln!("Detected originating IP: {chosen} (source: {source})");
+    Ok(IpExtractionResult { ip: chosen, source })
 }
 
-/// Generic regex-based first public IPv4 extractor with validation predicate.
-fn extract_first_ipv4(
+/// Generic regex-based first public IP extractor.
+fn extract_first_ip(
     unfolded: &str,
     pattern: &str,
-    public_pred: &impl Fn(Ipv4Addr) -> bool,
-) -> Option<Ipv4Addr> {
+    public_pred: &impl Fn(IpAddr) -> bool,
+) -> Option<IpAddr> {
     let re = Regex::new(pattern).ok()?;
     for caps in re.captures_iter(unfolded) {
         if let Some(mat) = caps.get(1) {
-            if let Ok(ip) = mat.as_str().parse::<Ipv4Addr>() {
+            if let Ok(ip) = mat.as_str().parse::<IpAddr>() {
                 if public_pred(ip) {
                     return Some(ip);
                 }
@@ -215,8 +195,7 @@ fn extract_first_ipv4(
     None
 }
 
-/// Unfold headers: join continuation lines (those starting with space or tab)
-/// into the previous line, separated by a single space.
+/// Unfold headers: join continuation lines.
 fn unfold_headers(raw: &str) -> String {
     let mut out = String::with_capacity(raw.len());
     for line in raw.lines() {
@@ -233,75 +212,58 @@ fn unfold_headers(raw: &str) -> String {
     out
 }
 
-/// Locate and parse an X-Originating-IP style header.
-/// Common formats:
-///   X-Originating-IP: [203.0.113.5]
-///   X-Originating-IP: 203.0.113.5
-fn find_x_originating_ip(headers_unfolded: &str) -> Option<Ipv4Addr> {
-    let re = Regex::new(r"(?im)^\s*x-originating-ip:\s*\[?([0-9]{1,3}(?:\.[0-9]{1,3}){3})]?\s*$")
-        .expect("valid regex");
+/// Locate and parse an X-Originating-IP style header for IPv4 or IPv6.
+fn find_x_originating_ip(
+    headers_unfolded: &str,
+    public_pred: &impl Fn(IpAddr) -> bool,
+) -> Option<IpAddr> {
+    let re = Regex::new(&format!(
+        r"(?im)^\s*x-originating-ip:\s*\[?({})\]?$",
+        IP_REGEX
+    ))
+    .expect("valid regex");
     if let Some(caps) = re.captures(headers_unfolded) {
-        let candidate = &caps[1];
-        if let Ok(ip) = candidate.parse::<Ipv4Addr>() {
-            if !is_private(ip) && !is_reserved(ip) {
-                return Some(ip);
+        if let Some(candidate) = caps.get(1) {
+            if let Ok(ip) = candidate.as_str().parse::<IpAddr>() {
+                if public_pred(ip) {
+                    return Some(ip);
+                }
             }
         }
     }
     None
 }
 
-/// Collect all unfolded `Received:` headers as standalone strings.
-/// We assume unfolded form (each header on one line).
+/// Collect all unfolded `Received:` headers.
 fn collect_received_headers(unfolded: &str) -> Vec<String> {
-    let mut out = Vec::new();
-    for line in unfolded.lines() {
-        if line.to_ascii_lowercase().starts_with("received:") {
-            out.push(line.to_string());
-        }
-    }
-    out
+    unfolded
+        .lines()
+        .filter(|line| line.to_ascii_lowercase().starts_with("received:"))
+        .map(|s| s.to_string())
+        .collect()
 }
 
-/// Extract all syntactically valid IPv4 addresses from a header line.
-/// Performs basic octet range validation (0..=255).
-fn extract_ipv4s(line: &str) -> Vec<Ipv4Addr> {
-    // Match candidate IPv4 tokens
-    let re = Regex::new(r"(?i)\b([0-9]{1,3}(?:\.[0-9]{1,3}){3})\b")
-        .expect("valid IPv4 extraction regex");
+/// Extract all syntactically valid IP addresses from a header line.
+fn extract_ips(line: &str) -> Vec<IpAddr> {
+    let re = Regex::new(IP_REGEX).expect("valid IP extraction regex");
     let mut ips = Vec::new();
     for cap in re.captures_iter(line) {
-        let s = &cap[1];
-        if let Ok(ip) = parse_ipv4_strict(s) {
-            ips.push(ip);
+        if let Some(s_match) = cap.get(1) {
+            let s = s_match.as_str();
+            if let Ok(ip) = s.parse::<IpAddr>() {
+                ips.push(ip);
+            }
         }
     }
     ips
 }
 
-/// Strict IPv4 parser ensuring each octet <= 255 (std::net::Ipv4Addr allows this
-/// inherently, but we double-check for clarity with manual parsing).
-fn parse_ipv4_strict(s: &str) -> Result<Ipv4Addr> {
-    let parts: Vec<&str> = s.split('.').collect();
-    if parts.len() != 4 {
-        bail!("invalid ipv4");
-    }
-    let mut octets = [0u8; 4];
-    for (i, part) in parts.iter().enumerate() {
-        let n = u16::from_str(part).map_err(|_| anyhow!("invalid octet"))?;
-        if n > 255 {
-            bail!("octet out of range");
-        }
-        octets[i] = n as u8;
-    }
-    Ok(Ipv4Addr::from(octets))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::netutil::{is_private, is_reserved};
-    const SAMPLE: &str = "\
+    use std::net::Ipv4Addr;
+
+    const SAMPLE_IPV4: &str = "
 Return-Path: <sender@example.org>
 Received: from mail.example.org (mail.example.org [8.8.8.8])
     by inbound.filter.local (Postfix) with ESMTPS id 12345
@@ -314,41 +276,56 @@ X-Originating-IP: [94.156.175.86]
 
 Body here
 ";
+
+    const SAMPLE_IPV6: &str = "
+Received: from mail-eopbgr6500.outbound.protection.outlook.com (mail-eopbgr6500.outbound.protection.outlook.com [2a01:111:e400:6500::4a])
+    by inbound.filter.local (Postfix) with ESMTPS id 12345
+    for <user@local>; Tue, 17 Sep 2024 12:34:56 +0000 (UTC)
+Received: from User-PC ([2001:db8::1])
+    by mail.example.org (Postfix) with ESMTPSA id 77777
+    for <user@local>; Tue, 17 Sep 2024 12:34:10 +0000 (UTC)
+Subject: Test IPv6
+";
+
     #[test]
     fn test_unfold() {
-        let raw = "Header: value\n  continuation\nAnother: x\n";
+        let raw = "Header: value
+  continuation
+Another: x
+";
         let unfolded = unfold_headers(raw);
         assert!(unfolded.contains("Header: value continuation"));
         assert!(unfolded.contains("Another: x"));
     }
 
     #[test]
-    fn test_parse_originating_ip_prefers_x_originating() {
-        let ip = parse_eml_origin_ip(SAMPLE).unwrap();
-        assert_eq!(ip, Ipv4Addr::new(94, 156, 175, 86));
+    fn test_parse_originating_ip_prefers_x_originating_ipv4() {
+        let ip = parse_eml_origin_ip(SAMPLE_IPV4).unwrap();
+        assert_eq!(ip.ip, IpAddr::V4(Ipv4Addr::new(94, 156, 175, 86)));
     }
 
     #[test]
-    fn test_received_only() {
-        let alt = SAMPLE.replace("X-Originating-IP: [94.156.175.86]\n", "");
+    fn test_received_only_ipv4() {
+        let alt = SAMPLE_IPV4.replace("X-Originating-IP: [94.156.175.86]\n", "");
         let ip = parse_eml_origin_ip(&alt).unwrap();
-        // earliest (bottom-most public) is 94.156.175.86
-        assert_eq!(ip, Ipv4Addr::new(94, 156, 175, 86));
+        assert_eq!(ip.ip, IpAddr::V4(Ipv4Addr::new(94, 156, 175, 86)));
+    }
+
+    #[test]
+    fn test_received_only_ipv6() {
+        let ip = parse_eml_origin_ip(SAMPLE_IPV6).unwrap();
+        // We select the earliest (bottom-most) public IPv6 hop in the Received chain.
+        assert_eq!(ip.ip, "2001:db8::1".parse::<IpAddr>().unwrap());
     }
 
     #[test]
     fn test_no_public_ip() {
-        let sample = "\
+        let sample = "
 Received: from internal (localhost [127.0.0.1]) by mx.local with ESMTP id 1;
 Received: from internal2 (gateway [10.0.0.10]) by internal with ESMTP id 2;
+Received: from host.local ([fe80::1]) by internal with ESMTP id 3;
 ";
         let res = parse_eml_origin_ip(sample);
         assert!(res.is_err(), "expected error, got {:?}", res);
-    }
-
-    #[test]
-    fn test_private_and_reserved_checks() {
-        assert!(is_private(Ipv4Addr::new(10, 0, 0, 1)));
-        assert!(is_reserved(Ipv4Addr::new(127, 0, 0, 1)));
     }
 }
