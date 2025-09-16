@@ -1,14 +1,22 @@
 mod cli;
+mod config;
 mod emails;
 mod eml;
+mod errors;
 mod netutil;
+mod output;
+mod retry;
 mod whois;
 
-use anyhow::Result;
 use cli::Cli;
+use config::Config;
 use emails::{soa_rname_to_email, EmailSet, FinalizeOptions};
+use errors::{AbuseDetectorError, Result};
 use netutil::{domain_of, ipv4_to_inaddr, is_private, is_reserved, parse_ipv4, reverse_dns};
-use std::time::Duration;
+use output::{
+    AbuseContact, AbuseResults, ContactMetadata, ContactSource, OutputFormat, QueryMetadata,
+};
+use std::time::{Duration, Instant};
 use trust_dns_resolver::{
     config::{ResolverConfig, ResolverOpts},
     proto::rr::{Name, RecordType},
@@ -19,9 +27,21 @@ use whois::{query_abuse_net, whois_ip_chain};
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::from_args();
+    let start_time = Instant::now();
+
+    // Load configuration
+    let mut config = Config::from_env();
+    config.merge_with_cli(&cli);
+
+    if let Err(e) = config.validate() {
+        if cli.error_enabled() {
+            eprintln!("Configuration error: {}", e);
+        }
+        return Ok(());
+    }
 
     // Determine IP: either directly from --ip or derived from --eml file
-    let ip = if let Some(ref eml_path) = cli.eml {
+    let (ip, from_eml, eml_file) = if let Some(ref eml_path) = cli.eml {
         if cli.is_trace() {
             eprintln!("Deriving originating IP from EML file: {eml_path}");
         }
@@ -32,7 +52,7 @@ async fn main() -> Result<()> {
                 }
                 // Always log the detected sender IP in EML mode (user-visible)
                 println!("Detected sender IP (from EML): {found}");
-                found
+                (found, true, Some(eml_path.clone()))
             }
             Err(e) => {
                 if cli.error_enabled() {
@@ -43,7 +63,11 @@ async fn main() -> Result<()> {
             }
         }
     } else if let Some(ref ip_str) = cli.ip {
-        parse_ipv4(ip_str)?
+        (
+            parse_ipv4(ip_str).map_err(|_| AbuseDetectorError::InvalidIpAddress(ip_str.clone()))?,
+            false,
+            None,
+        )
     } else {
         if cli.error_enabled() {
             eprintln!("Error: either an IP address or --eml file must be provided.");
@@ -64,25 +88,41 @@ async fn main() -> Result<()> {
     }
 
     let mut emails = EmailSet::new();
+    let mut metadata = QueryMetadata {
+        from_eml,
+        eml_file,
+        ..Default::default()
+    };
 
     // Reverse DNS
     let hostname = if !cli.no_use_hostname {
         if cli.is_trace() {
             eprintln!("Reverse DNS lookup for {ip}...");
         }
-        reverse_dns(ip, cli.show_commands).await?
+        metadata.dns_queries += 1;
+        reverse_dns(ip, cli.show_commands).await.unwrap_or(None)
     } else {
         None
     };
+
+    metadata.hostname = hostname.clone();
+
     if cli.is_trace() {
         eprintln!("Hostname: {}", hostname.as_deref().unwrap_or("<none>"));
     }
 
     // abuse.net (hostname domain first)
     if !cli.no_use_abusenet {
+        metadata.abuse_net_queried = true;
         if let Some(ref h) = hostname {
             if let Some(dom) = domain_of(h) {
-                query_abuse_net(&dom, &mut emails, &cli).await?;
+                if let Err(e) = query_abuse_net(&dom, &mut emails, &cli).await {
+                    if cli.warn_enabled() {
+                        metadata
+                            .warnings
+                            .push(format!("abuse.net query failed: {}", e));
+                    }
+                }
             }
         }
     }
@@ -90,49 +130,94 @@ async fn main() -> Result<()> {
     // DNS SOA traversal (hostname + reverse in-addr)
     if !cli.no_use_dns_soa {
         if let Some(ref h) = hostname {
-            traverse_soa(h, &mut emails, &cli).await?;
+            if let Err(e) = traverse_soa(h, &mut emails, &cli, &mut metadata).await {
+                if cli.warn_enabled() {
+                    metadata
+                        .warnings
+                        .push(format!("DNS SOA traversal failed for hostname: {}", e));
+                }
+            }
         }
-        traverse_soa(&ipv4_to_inaddr(ip), &mut emails, &cli).await?;
+        if let Err(e) = traverse_soa(&ipv4_to_inaddr(ip), &mut emails, &cli, &mut metadata).await {
+            if cli.warn_enabled() {
+                metadata
+                    .warnings
+                    .push(format!("DNS SOA traversal failed for reverse IP: {}", e));
+            }
+        }
     }
 
     // WHOIS IP chain
     if !cli.no_use_whois_ip {
-        whois_ip_chain(ip, &mut emails, &cli).await?;
+        if let Err(e) = whois_ip_chain(ip, &mut emails, &cli).await {
+            if cli.warn_enabled() {
+                metadata
+                    .warnings
+                    .push(format!("WHOIS chain query failed: {}", e));
+            }
+        }
+        metadata.whois_servers_queried += 1; // This is a simplification
     }
+
+    // Record duration
+    metadata.duration_ms = Some(start_time.elapsed().as_millis() as u64);
 
     // Finalize & filter
     let finalize_opts = FinalizeOptions {
         single_if_not_verbose: !cli.show_internal() && !cli.batch,
         ..Default::default()
     };
-    let results = emails.finalize(finalize_opts);
+    let email_results = emails.finalize(finalize_opts);
 
-    // Batch output
-    if cli.batch {
-        let joined = results
-            .iter()
-            .map(|(e, _)| e.as_str())
-            .collect::<Vec<_>>()
-            .join(",");
-        println!("{}:{joined}", ip);
-        return Ok(());
-    }
+    // Convert to structured results
+    let contacts: Vec<AbuseContact> = email_results
+        .into_iter()
+        .map(|(email, confidence)| AbuseContact {
+            email: email.clone(),
+            confidence,
+            source: ContactSource::Unknown, // TODO: Track sources properly
+            metadata: ContactMetadata {
+                domain: email.split('@').nth(1).map(|s| s.to_string()),
+                is_abuse_specific: email.starts_with("abuse@"),
+                filtered: false,
+                notes: vec![],
+            },
+        })
+        .collect();
 
-    // Human output
-    if cli.show_internal() {
-        println!("Found abuse addresses (email\tconfidence):");
-        for (e, c) in &results {
-            println!("{e}\t{c}");
+    let results = AbuseResults {
+        ip,
+        contacts,
+        metadata,
+    };
+
+    // Determine output format
+    let output_format = if cli.batch {
+        OutputFormat::Batch
+    } else if cli.show_internal() {
+        OutputFormat::Text {
+            show_confidence: true,
+            show_sources: true,
+            show_metadata: cli.is_trace(),
         }
     } else {
-        // Only print addresses
-        for (e, _) in &results {
-            println!("{e}");
+        OutputFormat::Text {
+            show_confidence: false,
+            show_sources: false,
+            show_metadata: false,
         }
-    }
+    };
+
+    // Format and output results
+    let formatter = output::create_formatter(&output_format);
+    let output_text = formatter.format_results(&results).map_err(|e| {
+        AbuseDetectorError::Configuration(format!("Output formatting failed: {}", e))
+    })?;
+
+    print!("{}", output_text);
 
     // If no results and verbose, hint user
-    if results.is_empty() && cli.error_enabled() {
+    if results.contacts.is_empty() && cli.error_enabled() {
         eprintln!("No abuse contacts discovered.");
     }
 
@@ -141,7 +226,12 @@ async fn main() -> Result<()> {
 
 /// Traverse up the domain labels performing SOA lookups and extracting RNAME
 /// which is translated into an email (first '.' becomes '@').
-async fn traverse_soa(base: &str, emails: &mut EmailSet, cli: &Cli) -> Result<()> {
+async fn traverse_soa(
+    base: &str,
+    emails: &mut EmailSet,
+    cli: &Cli,
+    metadata: &mut QueryMetadata,
+) -> Result<()> {
     let resolver = TokioAsyncResolver::tokio(ResolverConfig::default(), ResolverOpts::default());
     let mut labels: Vec<&str> = base.trim_end_matches('.').split('.').collect();
     if cli.is_trace() {
@@ -157,19 +247,37 @@ async fn traverse_soa(base: &str, emails: &mut EmailSet, cli: &Cli) -> Result<()
             eprintln!(" SOA query: {candidate}");
         }
 
-        if let Ok(Ok(answer)) = tokio::time::timeout(
+        metadata.dns_queries += 1;
+        match tokio::time::timeout(
             Duration::from_secs(5),
-            resolver.lookup(Name::from_ascii(&candidate)?, RecordType::SOA),
+            resolver.lookup(
+                Name::from_ascii(&candidate).map_err(|e| {
+                    AbuseDetectorError::Configuration(format!("Invalid domain name: {}", e))
+                })?,
+                RecordType::SOA,
+            ),
         )
         .await
         {
-            if let Some(trust_dns_resolver::proto::rr::RData::SOA(soa)) = answer.iter().next() {
-                let rname = soa.rname().to_utf8();
-                if let Some(email) = soa_rname_to_email(rname.trim_end_matches('.')) {
-                    emails.add_with_conf(&email, 1);
-                    if cli.is_trace() {
-                        eprintln!("  SOA rname => {email}");
+            Ok(Ok(answer)) => {
+                if let Some(trust_dns_resolver::proto::rr::RData::SOA(soa)) = answer.iter().next() {
+                    let rname = soa.rname().to_utf8();
+                    if let Some(email) = soa_rname_to_email(rname.trim_end_matches('.')) {
+                        emails.add_with_conf(&email, 1);
+                        if cli.is_trace() {
+                            eprintln!("  SOA rname => {email}");
+                        }
                     }
+                }
+            }
+            Ok(Err(e)) => {
+                if cli.is_trace() {
+                    eprintln!("  SOA query failed for {}: {}", candidate, e);
+                }
+            }
+            Err(_) => {
+                if cli.is_trace() {
+                    eprintln!("  SOA query timeout for {}", candidate);
                 }
             }
         }
