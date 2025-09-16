@@ -261,7 +261,7 @@ fn test_verbose_output_shows_commands() {
 
     // Should show various operations being performed
     // Note: Some of these might not appear if network operations are disabled/fail
-    let possible_operations = vec!["host", "dig", "whois"];
+    let possible_operations = ["host", "dig", "whois"];
     let _found_operations = possible_operations.iter().any(|op| stderr.contains(op));
     // We expect at least some operations to be shown, though exact ones depend on network
 }

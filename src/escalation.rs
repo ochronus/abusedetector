@@ -737,10 +737,7 @@ impl DualEscalationPath {
 
         // Create sender hosting escalation path if we have a sender domain
         let sender_hosting = if let Some(ref domain) = sender_domain {
-            match Self::create_sender_hosting_path(domain).await {
-                Ok(path) => Some(path),
-                Err(_) => None, // Don't fail if sender hosting lookup fails
-            }
+            (Self::create_sender_hosting_path(domain).await).ok()
         } else {
             None
         };

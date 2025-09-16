@@ -25,6 +25,7 @@
 //! ```
 
 // Re-export all modules for library use
+pub mod app;
 pub mod cli;
 pub mod config;
 pub mod domain_utils;
