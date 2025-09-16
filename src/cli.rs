@@ -8,6 +8,13 @@ use clap::Parser;
 /// 1 - errors (default)
 /// 2 - warnings + errors
 /// 5 - trace/debug
+///
+/// Output formats:
+/// --batch: Single line "ip:contact1,contact2" (legacy)
+/// --json: Structured JSON output with schema
+/// --yaml: Structured YAML output
+/// --plain: Plain text without styling
+/// Default: Rich styled terminal output
 #[derive(Parser, Debug, Clone)]
 #[command(
     author,
@@ -15,8 +22,8 @@ use clap::Parser;
     about = "Discover likely abuse reporting email addresses for an IPv4 address or an .eml message"
 )]
 pub struct Cli {
-    /// Target IPv4 address (numeric, e.g. 203.0.113.10). Required unless --eml is provided.
-    #[arg(required_unless_present = "eml", conflicts_with = "eml")]
+    /// Target IPv4 address (numeric, e.g. 203.0.113.10). Required unless --eml or --generate-schema is provided.
+    #[arg(required_unless_present_any = ["eml", "generate_schema"], conflicts_with = "eml")]
     pub ip: Option<String>,
 
     /// Path to a .eml message file; if supplied the originating sender IP will be extracted and used.
@@ -48,8 +55,16 @@ pub struct Cli {
     pub show_commands: bool,
 
     /// Batch output: single line "ip:addr1,addr2"
-    #[arg(long)]
+    #[arg(long, conflicts_with_all = ["json", "yaml"])]
     pub batch: bool,
+
+    /// Output results in JSON format (structured, with schema)
+    #[arg(long, conflicts_with_all = ["batch", "yaml"])]
+    pub json: bool,
+
+    /// Output results in YAML format (structured, human-readable)
+    #[arg(long, conflicts_with_all = ["batch", "json"])]
+    pub yaml: bool,
 
     /// Show escalation path when primary contacts are found
     #[arg(long)]
@@ -74,6 +89,10 @@ pub struct Cli {
     /// Cache expiration seconds (future feature)
     #[arg(long = "cache-expire", default_value_t = 7 * 24 * 3600)]
     pub cache_expire: u64,
+
+    /// Generate JSON schema for structured output formats and exit
+    #[arg(long)]
+    pub generate_schema: bool,
 }
 
 impl Cli {
@@ -109,6 +128,41 @@ impl Cli {
 
     /// Should we use styled/colored output?
     pub fn should_use_styling(&self) -> bool {
-        !self.no_color && !self.plain && !self.batch
+        !self.no_color && !self.plain && !self.batch && !self.json && !self.yaml
     }
+
+    /// Should we use structured output (JSON/YAML)?
+    pub fn is_structured_output(&self) -> bool {
+        self.json || self.yaml
+    }
+
+    /// Get the output format
+    pub fn output_format(&self) -> OutputFormat {
+        if self.json {
+            OutputFormat::Json
+        } else if self.yaml {
+            OutputFormat::Yaml
+        } else if self.batch {
+            OutputFormat::Batch
+        } else if self.plain {
+            OutputFormat::Plain
+        } else {
+            OutputFormat::Styled
+        }
+    }
+}
+
+/// Output format options
+#[derive(Debug, Clone, PartialEq)]
+pub enum OutputFormat {
+    /// Rich styled terminal output (default)
+    Styled,
+    /// Plain text output
+    Plain,
+    /// Single line batch format
+    Batch,
+    /// JSON structured output
+    Json,
+    /// YAML structured output
+    Yaml,
 }

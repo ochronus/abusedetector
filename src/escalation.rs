@@ -14,7 +14,7 @@ use std::process::Command;
 use std::str;
 
 /// Represents different types of escalation contacts
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, schemars::JsonSchema)]
 pub enum EscalationContactType {
     /// Direct abuse contact from original source
     DirectAbuse,
@@ -318,9 +318,33 @@ impl EscalationPath {
         }
 
         // Fallback to Team Cymru ASN lookup
-        if let Ok(cymru_info) =
-            crate::whois::query_cymru_asn(self.ip, &crate::cli::Cli::from_args()).await
-        {
+        // Create a default CLI config for tests, or use from_args for normal execution
+        let cli = if cfg!(test) {
+            crate::cli::Cli {
+                ip: Some(self.ip.to_string()),
+                eml: None,
+                verbose: 0,
+                no_use_hostname: false,
+                no_use_abusenet: false,
+                no_use_dns_soa: false,
+                no_use_whois_ip: false,
+                show_commands: false,
+                batch: false,
+                json: false,
+                yaml: false,
+                show_escalation: false,
+                escalation_only: false,
+                no_color: false,
+                plain: false,
+                cache: None,
+                cache_expire: 7 * 24 * 3600,
+                generate_schema: false,
+            }
+        } else {
+            crate::cli::Cli::from_args()
+        };
+
+        if let Ok(cymru_info) = crate::whois::query_cymru_asn(self.ip, &cli).await {
             return Some(AsnInfo {
                 asn: cymru_info.asn,
                 name: cymru_info.as_name,
@@ -660,6 +684,7 @@ impl EscalationPath {
     }
 
     /// Sort contacts by recommended escalation order
+    #[allow(dead_code)]
     pub fn get_recommended_order(&self) -> Vec<&EscalationContact> {
         let mut contacts = self.contacts.iter().collect::<Vec<_>>();
 
@@ -675,6 +700,7 @@ impl EscalationPath {
     }
 
     /// Get priority order for contact types (lower number = higher priority)
+    #[allow(dead_code)]
     fn get_type_priority(&self, contact_type: &EscalationContactType) -> u8 {
         match contact_type {
             EscalationContactType::DirectAbuse => 1,

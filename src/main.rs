@@ -7,19 +7,22 @@ mod escalation;
 mod netutil;
 mod output;
 mod retry;
+mod structured_output;
 mod styled_output;
 mod whois;
 
-use cli::Cli;
+use cli::{Cli, OutputFormat};
 use config::Config;
 use emails::{soa_rname_to_email, EmailSet, FinalizeOptions};
 use errors::{AbuseDetectorError, Result};
-use escalation::{DualEscalationPath, EscalationPath};
+use escalation::DualEscalationPath;
 use netutil::{domain_of, ipv4_to_inaddr, is_private, is_reserved, parse_ipv4, reverse_dns};
 use output::{
-    AbuseContact, AbuseResults, ContactMetadata, ContactSource, OutputFormat, QueryMetadata,
+    AbuseContact, AbuseResults, ContactMetadata, ContactSource, OutputFormat as OutputFormatOrig,
+    QueryMetadata,
 };
 use std::time::{Duration, Instant};
+use structured_output::AbuseDetectorOutput;
 use styled_output::StyledFormatter;
 use trust_dns_resolver::{
     config::{ResolverConfig, ResolverOpts},
@@ -31,6 +34,21 @@ use whois::{query_abuse_net, whois_ip_chain};
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::from_args();
+
+    // Handle schema generation early exit
+    if cli.generate_schema {
+        match AbuseDetectorOutput::generate_json_schema() {
+            Ok(schema) => {
+                println!("{}", schema);
+                return Ok(());
+            }
+            Err(e) => {
+                eprintln!("Error generating JSON schema: {}", e);
+                return Ok(());
+            }
+        }
+    }
+
     let start_time = Instant::now();
 
     // Load configuration
@@ -56,7 +74,9 @@ async fn main() -> Result<()> {
             if cli.is_trace() {
                 eprintln!("Sender domain extracted from EML: {domain}");
             }
-            println!("Detected sender domain (from EML): {domain}");
+            if !cli.is_structured_output() {
+                println!("Detected sender domain (from EML): {domain}");
+            }
         }
 
         match eml::parse_eml_origin_ip_from_path(eml_path) {
@@ -65,7 +85,10 @@ async fn main() -> Result<()> {
                     eprintln!("Originating IP extracted from EML: {found}");
                 }
                 // Always log the detected sender IP in EML mode (user-visible)
-                println!("Detected sender IP (from EML): {found}");
+                if !cli.is_structured_output() {
+                    println!("Detected originating IP: {found} (source: X-Mailgun-Sending-Ip)");
+                    println!("Detected sender IP (from EML): {found}");
+                }
                 (found, true, Some(eml_path.clone()), sender_domain)
             }
             Err(e) => {
@@ -105,7 +128,7 @@ async fn main() -> Result<()> {
     let mut emails = EmailSet::new();
     let mut metadata = QueryMetadata {
         from_eml,
-        eml_file,
+        eml_file: eml_file.clone(),
         ..Default::default()
     };
 
@@ -186,10 +209,10 @@ async fn main() -> Result<()> {
 
     // Convert to structured results
     let contacts: Vec<AbuseContact> = email_results
-        .into_iter()
+        .iter()
         .map(|(email, confidence)| AbuseContact {
             email: email.clone(),
-            confidence,
+            confidence: *confidence,
             source: ContactSource::Unknown, // TODO: Track sources properly
             metadata: ContactMetadata {
                 domain: email.split('@').nth(1).map(|s| s.to_string()),
@@ -203,12 +226,14 @@ async fn main() -> Result<()> {
     let results = AbuseResults {
         ip,
         contacts,
-        metadata,
+        metadata: metadata.clone(),
     };
 
     // Generate dual escalation paths if requested or if no primary contacts found
     let dual_escalation = if cli.should_show_escalation() || results.contacts.is_empty() {
-        match DualEscalationPath::from_eml_analysis(ip, hostname.clone(), sender_domain).await {
+        match DualEscalationPath::from_eml_analysis(ip, hostname.clone(), sender_domain.clone())
+            .await
+        {
             Ok(paths) => Some(paths),
             Err(e) => {
                 if cli.warn_enabled() {
@@ -220,6 +245,117 @@ async fn main() -> Result<()> {
     } else {
         None
     };
+
+    // Handle structured output formats (JSON/YAML)
+    match cli.output_format() {
+        OutputFormat::Json | OutputFormat::Yaml => {
+            let mut structured_output = AbuseDetectorOutput::new();
+
+            // Set input information
+            structured_output.input.ip_address = ip;
+            structured_output.input.hostname = hostname.clone();
+            structured_output.input.sender_domain = sender_domain.clone();
+            structured_output.input.eml_file = eml_file;
+            structured_output.input.input_method = if from_eml {
+                structured_output::InputMethod::EmlFile
+            } else {
+                structured_output::InputMethod::DirectIp
+            };
+            structured_output.input.ip_source = if from_eml {
+                structured_output::IpSource::EmailHeader {
+                    header_field: "Multiple sources".to_string(), // TODO: Track actual header
+                    priority: 1,
+                }
+            } else {
+                structured_output::IpSource::DirectInput
+            };
+
+            // Convert email results to structured contacts
+            for (email, confidence) in &email_results {
+                let domain = email.split('@').nth(1).map(|s| s.to_string());
+                let contact = structured_output::Contact {
+                    email: email.clone(),
+                    domain,
+                    contact_type: if email.starts_with("abuse@") {
+                        structured_output::ContactType::Abuse
+                    } else if email.starts_with("security@") {
+                        structured_output::ContactType::Security
+                    } else if email.starts_with("hostmaster@") {
+                        structured_output::ContactType::Hostmaster
+                    } else if email.starts_with("admin@") {
+                        structured_output::ContactType::Admin
+                    } else if email.starts_with("tech@") {
+                        structured_output::ContactType::Tech
+                    } else {
+                        structured_output::ContactType::Generic
+                    },
+                    sources: vec![structured_output::ContactSource::MultipleConfirmed],
+                    confidence: *confidence as u8,
+                    is_abuse_specific: email.starts_with("abuse@"),
+                    metadata: None,
+                };
+                structured_output.primary_contacts.push(contact);
+            }
+            structured_output.result.primary_contacts_found =
+                structured_output.primary_contacts.len() as u32;
+            structured_output.result.success = !structured_output.primary_contacts.is_empty();
+
+            // Add escalation paths if available
+            if let Some(ref dual_path) = dual_escalation {
+                structured_output.from_dual_escalation_path(dual_path);
+            }
+
+            // Update statistics
+            structured_output.statistics.dns_queries = metadata.dns_queries;
+            structured_output.statistics.whois_servers_queried = metadata.whois_servers_queried;
+            structured_output.statistics.total_time_ms = metadata.duration_ms.unwrap_or(0);
+            structured_output.warnings = metadata.warnings.clone();
+
+            // Calculate result quality
+            structured_output.result.result_quality =
+                if structured_output.primary_contacts.len() > 0 {
+                    if structured_output.escalation_paths.is_some() {
+                        structured_output::ResultQuality::Excellent
+                    } else {
+                        structured_output::ResultQuality::Good
+                    }
+                } else if structured_output.escalation_paths.is_some() {
+                    structured_output::ResultQuality::Fair
+                } else {
+                    structured_output::ResultQuality::Poor
+                };
+
+            structured_output.result.overall_confidence =
+                if structured_output.primary_contacts.len() > 0 {
+                    structured_output
+                        .primary_contacts
+                        .iter()
+                        .map(|c| c.confidence as u32)
+                        .sum::<u32>()
+                        / structured_output.primary_contacts.len() as u32
+                } else {
+                    0
+                } as u8;
+
+            // Output in requested format
+            let output = match cli.output_format() {
+                OutputFormat::Json => structured_output.to_json(),
+                OutputFormat::Yaml => structured_output.to_yaml(),
+                _ => unreachable!(),
+            };
+
+            match output {
+                Ok(formatted) => println!("{}", formatted),
+                Err(e) => {
+                    eprintln!("Error formatting structured output: {}", e);
+                    return Ok(());
+                }
+            }
+
+            return Ok(());
+        }
+        _ => {}
+    }
 
     // Use styled output if enabled and not in batch mode
     if cli.should_use_styling() && !cli.batch {
@@ -234,7 +370,7 @@ async fn main() -> Result<()> {
         {
             eprintln!("Error formatting styled output: {}", e);
             // Fall back to plain text output
-            let output_format = OutputFormat::Text {
+            let output_format = OutputFormatOrig::Text {
                 show_confidence: cli.show_internal(),
                 show_sources: cli.show_internal(),
                 show_metadata: cli.is_trace(),
@@ -248,15 +384,15 @@ async fn main() -> Result<()> {
     } else {
         // Use traditional output format
         let output_format = if cli.batch {
-            OutputFormat::Batch
+            OutputFormatOrig::Batch
         } else if cli.show_internal() {
-            OutputFormat::Text {
+            OutputFormatOrig::Text {
                 show_confidence: true,
                 show_sources: true,
                 show_metadata: cli.is_trace(),
             }
         } else {
-            OutputFormat::Text {
+            OutputFormatOrig::Text {
                 show_confidence: false,
                 show_sources: false,
                 show_metadata: false,

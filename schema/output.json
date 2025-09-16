@@ -1,0 +1,1050 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AbuseDetectorOutput",
+  "description": "Root structure for all abusedetector output in structured formats",
+  "type": "object",
+  "required": [
+    "input",
+    "metadata",
+    "primary_contacts",
+    "result",
+    "statistics",
+    "warnings"
+  ],
+  "properties": {
+    "escalation_paths": {
+      "description": "Escalation paths (if requested and available)",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/EscalationPaths"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "input": {
+      "description": "Input information that was analyzed",
+      "allOf": [
+        {
+          "$ref": "#/definitions/InputInfo"
+        }
+      ]
+    },
+    "metadata": {
+      "description": "Tool version and metadata",
+      "allOf": [
+        {
+          "$ref": "#/definitions/OutputMetadata"
+        }
+      ]
+    },
+    "primary_contacts": {
+      "description": "Primary abuse contacts discovered",
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/Contact"
+      }
+    },
+    "result": {
+      "description": "Success status and result summary",
+      "allOf": [
+        {
+          "$ref": "#/definitions/ResultSummary"
+        }
+      ]
+    },
+    "statistics": {
+      "description": "Query statistics and performance metrics",
+      "allOf": [
+        {
+          "$ref": "#/definitions/QueryStatistics"
+        }
+      ]
+    },
+    "warnings": {
+      "description": "Warnings and errors encountered during processing",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "definitions": {
+    "CloudProviderInfo": {
+      "description": "Cloud provider information",
+      "type": "object",
+      "required": [
+        "provider"
+      ],
+      "properties": {
+        "provider": {
+          "description": "Provider name (e.g., \"Amazon Web Services\")",
+          "type": "string"
+        },
+        "region": {
+          "description": "Cloud region (if identifiable)",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "service": {
+          "description": "Specific service (if identifiable)",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "Contact": {
+      "description": "A contact entry with rich metadata",
+      "type": "object",
+      "required": [
+        "confidence",
+        "contact_type",
+        "email",
+        "is_abuse_specific",
+        "sources"
+      ],
+      "properties": {
+        "confidence": {
+          "description": "Confidence score (0-100)",
+          "type": "integer",
+          "format": "uint8",
+          "minimum": 0.0
+        },
+        "contact_type": {
+          "description": "Type of contact",
+          "allOf": [
+            {
+              "$ref": "#/definitions/ContactType"
+            }
+          ]
+        },
+        "domain": {
+          "description": "Domain the contact is associated with",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "email": {
+          "description": "The email address",
+          "type": "string"
+        },
+        "is_abuse_specific": {
+          "description": "Whether this is an abuse-specific address",
+          "type": "boolean"
+        },
+        "metadata": {
+          "description": "Additional metadata about this contact",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ContactMetadata"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sources": {
+          "description": "How this contact was discovered",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ContactSource"
+          }
+        }
+      }
+    },
+    "ContactMetadata": {
+      "description": "Additional contact metadata",
+      "type": "object",
+      "required": [
+        "notes"
+      ],
+      "properties": {
+        "country": {
+          "description": "Country code",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "notes": {
+          "description": "Additional notes",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "organization": {
+          "description": "Organization name",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "ContactSource": {
+      "description": "Source where a contact was discovered",
+      "oneOf": [
+        {
+          "description": "WHOIS database lookup",
+          "type": "object",
+          "required": [
+            "whois"
+          ],
+          "properties": {
+            "whois": {
+              "type": "object",
+              "required": [
+                "server"
+              ],
+              "properties": {
+                "server": {
+                  "description": "WHOIS server queried",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "DNS SOA record RNAME",
+          "type": "object",
+          "required": [
+            "dns_soa"
+          ],
+          "properties": {
+            "dns_soa": {
+              "type": "object",
+              "required": [
+                "domain"
+              ],
+              "properties": {
+                "domain": {
+                  "description": "Domain queried",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "description": "abuse.net database",
+          "type": "string",
+          "enum": [
+            "abuse_net"
+          ]
+        },
+        {
+          "description": "Hostname-based heuristics",
+          "type": "string",
+          "enum": [
+            "hostname_heuristic"
+          ]
+        },
+        {
+          "description": "Multiple sources confirm this contact",
+          "type": "string",
+          "enum": [
+            "multiple_confirmed"
+          ]
+        }
+      ]
+    },
+    "ContactType": {
+      "description": "Type of abuse contact",
+      "oneOf": [
+        {
+          "description": "Direct abuse contact",
+          "type": "string",
+          "enum": [
+            "abuse"
+          ]
+        },
+        {
+          "description": "Security contact",
+          "type": "string",
+          "enum": [
+            "security"
+          ]
+        },
+        {
+          "description": "Hostmaster contact",
+          "type": "string",
+          "enum": [
+            "hostmaster"
+          ]
+        },
+        {
+          "description": "Administrative contact",
+          "type": "string",
+          "enum": [
+            "admin"
+          ]
+        },
+        {
+          "description": "Technical contact",
+          "type": "string",
+          "enum": [
+            "tech"
+          ]
+        },
+        {
+          "description": "Generic contact",
+          "type": "string",
+          "enum": [
+            "generic"
+          ]
+        }
+      ]
+    },
+    "EffectivenessRating": {
+      "description": "Effectiveness rating for contacts",
+      "oneOf": [
+        {
+          "description": "Highly effective, fast response",
+          "type": "string",
+          "enum": [
+            "high"
+          ]
+        },
+        {
+          "description": "Moderately effective",
+          "type": "string",
+          "enum": [
+            "medium"
+          ]
+        },
+        {
+          "description": "Lower effectiveness or slow response",
+          "type": "string",
+          "enum": [
+            "low"
+          ]
+        },
+        {
+          "description": "Effectiveness unknown",
+          "type": "string",
+          "enum": [
+            "unknown"
+          ]
+        }
+      ]
+    },
+    "EscalationContactInfo": {
+      "description": "Escalation contact with level and metadata",
+      "type": "object",
+      "required": [
+        "contact_type",
+        "level",
+        "notes",
+        "organization"
+      ],
+      "properties": {
+        "contact_type": {
+          "description": "Type of escalation contact",
+          "allOf": [
+            {
+              "$ref": "#/definitions/EscalationContactType"
+            }
+          ]
+        },
+        "effectiveness": {
+          "description": "Effectiveness rating (if known)",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/EffectivenessRating"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "email": {
+          "description": "Email contact (if available)",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "level": {
+          "description": "Escalation level (0 = first contact, 1 = second, etc.)",
+          "type": "integer",
+          "format": "uint8",
+          "minimum": 0.0
+        },
+        "notes": {
+          "description": "Notes about this contact",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "organization": {
+          "description": "Organization name",
+          "type": "string"
+        },
+        "response_expectation": {
+          "description": "Expected response time",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "web_form": {
+          "description": "Web form URL (if available)",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "EscalationContactType": {
+      "description": "Represents different types of escalation contacts",
+      "oneOf": [
+        {
+          "description": "Direct abuse contact from original source",
+          "type": "string",
+          "enum": [
+            "DirectAbuse"
+          ]
+        },
+        {
+          "description": "Hosting provider for the domain/service",
+          "type": "string",
+          "enum": [
+            "HostingProvider"
+          ]
+        },
+        {
+          "description": "Domain name registrar",
+          "type": "string",
+          "enum": [
+            "DomainRegistrar"
+          ]
+        },
+        {
+          "description": "Autonomous System Number owner (ISP/hosting company)",
+          "type": "string",
+          "enum": [
+            "AsnOwner"
+          ]
+        },
+        {
+          "description": "Regional Internet Registry (ARIN, RIPE, etc.)",
+          "type": "string",
+          "enum": [
+            "RegionalRegistry"
+          ]
+        },
+        {
+          "description": "Cloud provider (AWS, Azure, GCP, etc.)",
+          "type": "string",
+          "enum": [
+            "CloudProvider"
+          ]
+        },
+        {
+          "description": "Parent organization (university, corporation)",
+          "type": "string",
+          "enum": [
+            "ParentOrganization"
+          ]
+        },
+        {
+          "description": "Legal/regulatory authority",
+          "type": "string",
+          "enum": [
+            "LegalAuthority"
+          ]
+        }
+      ]
+    },
+    "EscalationPath": {
+      "description": "A single escalation path with prioritized contacts",
+      "type": "object",
+      "required": [
+        "contacts",
+        "description",
+        "purpose"
+      ],
+      "properties": {
+        "contacts": {
+          "description": "Ordered list of escalation contacts (Level 0, 1, 2, etc.)",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/EscalationContactInfo"
+          }
+        },
+        "description": {
+          "description": "Description of what this path targets",
+          "type": "string"
+        },
+        "network_info": {
+          "description": "Network information relevant to this path",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/NetworkInfo"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "purpose": {
+          "description": "Purpose of this escalation path",
+          "type": "string"
+        }
+      }
+    },
+    "EscalationPathType": {
+      "description": "Type of escalation path",
+      "oneOf": [
+        {
+          "description": "Focus on email infrastructure",
+          "type": "string",
+          "enum": [
+            "email_infrastructure"
+          ]
+        },
+        {
+          "description": "Focus on sender hosting",
+          "type": "string",
+          "enum": [
+            "sender_hosting"
+          ]
+        },
+        {
+          "description": "Use both paths simultaneously",
+          "type": "string",
+          "enum": [
+            "dual"
+          ]
+        }
+      ]
+    },
+    "EscalationPaths": {
+      "description": "Escalation paths for when primary contacts don't respond",
+      "type": "object",
+      "required": [
+        "email_infrastructure",
+        "generated_at",
+        "strategy"
+      ],
+      "properties": {
+        "email_infrastructure": {
+          "description": "Email infrastructure escalation (for stopping email sending)",
+          "allOf": [
+            {
+              "$ref": "#/definitions/EscalationPath"
+            }
+          ]
+        },
+        "generated_at": {
+          "description": "When these paths were generated",
+          "type": "string",
+          "format": "date-time"
+        },
+        "sender_hosting": {
+          "description": "Sender hosting escalation (for stopping website/business)",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/EscalationPath"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "strategy": {
+          "description": "Recommended escalation strategy",
+          "allOf": [
+            {
+              "$ref": "#/definitions/EscalationStrategy"
+            }
+          ]
+        }
+      }
+    },
+    "EscalationStrategy": {
+      "description": "Escalation strategy recommendation",
+      "type": "object",
+      "required": [
+        "considerations",
+        "escalation_interval",
+        "primary_path",
+        "secondary_escalation_trigger"
+      ],
+      "properties": {
+        "considerations": {
+          "description": "Special considerations",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "escalation_interval": {
+          "description": "Recommended waiting time between escalation levels",
+          "type": "string"
+        },
+        "primary_path": {
+          "description": "Recommended primary path",
+          "allOf": [
+            {
+              "$ref": "#/definitions/EscalationPathType"
+            }
+          ]
+        },
+        "secondary_escalation_trigger": {
+          "description": "When to escalate to secondary path",
+          "type": "string"
+        }
+      }
+    },
+    "InputInfo": {
+      "description": "Information about what was analyzed",
+      "type": "object",
+      "required": [
+        "input_method",
+        "ip_address",
+        "ip_source"
+      ],
+      "properties": {
+        "eml_file": {
+          "description": "EML file path (if applicable)",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "hostname": {
+          "description": "Reverse DNS hostname (if available)",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "input_method": {
+          "description": "Original input method",
+          "allOf": [
+            {
+              "$ref": "#/definitions/InputMethod"
+            }
+          ]
+        },
+        "ip_address": {
+          "description": "The IP address that was analyzed",
+          "type": "string",
+          "format": "ipv4"
+        },
+        "ip_source": {
+          "description": "How the IP was obtained",
+          "allOf": [
+            {
+              "$ref": "#/definitions/IpSource"
+            }
+          ]
+        },
+        "sender_domain": {
+          "description": "Sender domain extracted from email (if applicable)",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "InputMethod": {
+      "description": "Input method used",
+      "oneOf": [
+        {
+          "description": "Direct IP address input",
+          "type": "string",
+          "enum": [
+            "direct_ip"
+          ]
+        },
+        {
+          "description": "EML file analysis",
+          "type": "string",
+          "enum": [
+            "eml_file"
+          ]
+        }
+      ]
+    },
+    "IpSource": {
+      "description": "How the IP address was obtained",
+      "oneOf": [
+        {
+          "description": "Directly provided by user",
+          "type": "string",
+          "enum": [
+            "direct_input"
+          ]
+        },
+        {
+          "description": "Extracted from email header",
+          "type": "object",
+          "required": [
+            "email_header"
+          ],
+          "properties": {
+            "email_header": {
+              "type": "object",
+              "required": [
+                "header_field",
+                "priority"
+              ],
+              "properties": {
+                "header_field": {
+                  "description": "Specific header field used",
+                  "type": "string"
+                },
+                "priority": {
+                  "description": "Priority/confidence of this source",
+                  "type": "integer",
+                  "format": "uint8",
+                  "minimum": 0.0
+                }
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "NetworkInfo": {
+      "description": "Network information for escalation context",
+      "type": "object",
+      "properties": {
+        "asn": {
+          "description": "Autonomous System Number",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "asn_name": {
+          "description": "ASN name/description",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cloud_provider": {
+          "description": "Cloud provider information",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/CloudProviderInfo"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "country": {
+          "description": "Country of registration",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "registry": {
+          "description": "Regional Internet Registry",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "NetworkStats": {
+      "description": "Network-related statistics",
+      "type": "object",
+      "required": [
+        "average_response_time_ms",
+        "failed_connections",
+        "timeouts",
+        "unique_servers_contacted"
+      ],
+      "properties": {
+        "average_response_time_ms": {
+          "description": "Average response time per query",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "failed_connections": {
+          "description": "Number of failed connections",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "timeouts": {
+          "description": "Number of timeouts encountered",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "unique_servers_contacted": {
+          "description": "Number of unique servers contacted",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        }
+      }
+    },
+    "OutputMetadata": {
+      "description": "Tool metadata and versioning information",
+      "type": "object",
+      "required": [
+        "generated_at",
+        "schema_url",
+        "schema_version",
+        "tool_name",
+        "version"
+      ],
+      "properties": {
+        "generated_at": {
+          "description": "Timestamp when analysis was performed",
+          "type": "string",
+          "format": "date-time"
+        },
+        "schema_url": {
+          "description": "URL to the JSON schema definition",
+          "type": "string"
+        },
+        "schema_version": {
+          "description": "JSON schema version for this output format",
+          "type": "string"
+        },
+        "tool_name": {
+          "description": "Tool name",
+          "type": "string"
+        },
+        "version": {
+          "description": "Tool version",
+          "type": "string"
+        }
+      }
+    },
+    "QueryStatistics": {
+      "description": "Query statistics and performance metrics",
+      "type": "object",
+      "required": [
+        "dns_queries",
+        "network_stats",
+        "query_success_rates",
+        "time_breakdown",
+        "total_time_ms",
+        "whois_servers_queried"
+      ],
+      "properties": {
+        "dns_queries": {
+          "description": "Number of DNS queries performed",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "network_stats": {
+          "description": "Network-related statistics",
+          "allOf": [
+            {
+              "$ref": "#/definitions/NetworkStats"
+            }
+          ]
+        },
+        "query_success_rates": {
+          "description": "Success/failure rates for different query types",
+          "allOf": [
+            {
+              "$ref": "#/definitions/QuerySuccessRates"
+            }
+          ]
+        },
+        "time_breakdown": {
+          "description": "Breakdown of time spent in different phases",
+          "allOf": [
+            {
+              "$ref": "#/definitions/TimeBreakdown"
+            }
+          ]
+        },
+        "total_time_ms": {
+          "description": "Total processing time in milliseconds",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "whois_servers_queried": {
+          "description": "Number of WHOIS servers queried",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        }
+      }
+    },
+    "QuerySuccessRates": {
+      "description": "Success rates for different query types",
+      "type": "object",
+      "required": [
+        "dns_success_rate",
+        "overall_success_rate",
+        "whois_success_rate"
+      ],
+      "properties": {
+        "dns_success_rate": {
+          "description": "DNS query success rate (0.0 - 1.0)",
+          "type": "number",
+          "format": "double"
+        },
+        "overall_success_rate": {
+          "description": "Overall success rate (0.0 - 1.0)",
+          "type": "number",
+          "format": "double"
+        },
+        "whois_success_rate": {
+          "description": "WHOIS query success rate (0.0 - 1.0)",
+          "type": "number",
+          "format": "double"
+        }
+      }
+    },
+    "ResultQuality": {
+      "description": "Quality assessment of the results",
+      "oneOf": [
+        {
+          "description": "Excellent results with high confidence",
+          "type": "string",
+          "enum": [
+            "excellent"
+          ]
+        },
+        {
+          "description": "Good results with reasonable confidence",
+          "type": "string",
+          "enum": [
+            "good"
+          ]
+        },
+        {
+          "description": "Fair results with some limitations",
+          "type": "string",
+          "enum": [
+            "fair"
+          ]
+        },
+        {
+          "description": "Poor results with low confidence",
+          "type": "string",
+          "enum": [
+            "poor"
+          ]
+        }
+      ]
+    },
+    "ResultSummary": {
+      "description": "Result summary and status",
+      "type": "object",
+      "required": [
+        "escalation_paths_generated",
+        "overall_confidence",
+        "primary_contacts_found",
+        "recommendations",
+        "result_quality",
+        "success"
+      ],
+      "properties": {
+        "escalation_paths_generated": {
+          "description": "Whether escalation paths were generated",
+          "type": "boolean"
+        },
+        "overall_confidence": {
+          "description": "Confidence in the overall result (0-100)",
+          "type": "integer",
+          "format": "uint8",
+          "minimum": 0.0
+        },
+        "primary_contacts_found": {
+          "description": "Number of primary contacts found",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0.0
+        },
+        "recommendations": {
+          "description": "Recommendations for the user",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "result_quality": {
+          "description": "Quality assessment of results",
+          "allOf": [
+            {
+              "$ref": "#/definitions/ResultQuality"
+            }
+          ]
+        },
+        "success": {
+          "description": "Overall success status",
+          "type": "boolean"
+        }
+      }
+    },
+    "TimeBreakdown": {
+      "description": "Time breakdown for different processing phases",
+      "type": "object",
+      "required": [
+        "dns_time_ms",
+        "escalation_time_ms",
+        "input_processing_ms",
+        "output_formatting_ms",
+        "whois_time_ms"
+      ],
+      "properties": {
+        "dns_time_ms": {
+          "description": "Time spent on DNS lookups",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "escalation_time_ms": {
+          "description": "Time spent on escalation path generation",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "input_processing_ms": {
+          "description": "Time spent on input parsing/validation",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "output_formatting_ms": {
+          "description": "Time spent on output formatting",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "whois_time_ms": {
+          "description": "Time spent on WHOIS queries",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        }
+      }
+    }
+  }
+}

@@ -76,6 +76,24 @@ Show only escalation paths (useful when primary contacts are unresponsive):
 abusedetector --eml message.eml --escalation-only
 ```
 
+Get structured JSON output with escalation paths:
+
+```
+abusedetector --eml message.eml --json --show-escalation
+```
+
+Get human-readable YAML output:
+
+```
+abusedetector --eml message.eml --yaml --show-escalation
+```
+
+Generate JSON schema for automation/validation:
+
+```
+abusedetector --generate-schema > schema.json
+```
+
 Verbose (trace) mode to see all internal steps:
 
 ```
@@ -99,8 +117,11 @@ abusedetector --batch 46.4.15.45
 | `<ip>` | Target IPv4 address (omit when using `--eml`) |
 | `--eml <FILE>` | Use an `.eml` file; extract originating sender IP |
 | `--verbose <n>` | Verbosity: 0 (silent), 1 (errors), 2 (warnings), 5 (trace) |
+| `--json` | Output results in structured JSON format (with schema) |
+| `--yaml` | Output results in structured YAML format (human-readable) |
 | `--show-escalation` | Show escalation paths when primary contacts are found |
 | `--escalation-only` | Always show escalation paths even if no primary contacts found |
+| `--generate-schema` | Generate JSON schema for structured output formats and exit |
 | `--no-use-hostname` | Skip reverse DNS hostname heuristics |
 | `--no-use-abusenet` | Skip abuse.net WHOIS queries |
 | `--no-use-dns-soa` | Skip SOA/RNAME discovery |
@@ -203,9 +224,50 @@ Registrar: Gandi SAS → abuse@support.gandi.net
 
 - **Standard**: Primary contacts with optional escalation paths
 - **Escalation-only**: Shows only escalation paths (useful for non-responsive primary contacts)
-- **Batch**: Machine-parsable single-line format
+- **JSON**: Structured JSON output with comprehensive schema
+- **YAML**: Human-readable structured YAML output
+- **Batch**: Machine-parsable single-line format (legacy)
 - **Styled**: Rich terminal output with icons and formatting
 - **Plain**: Simple text output for integration
+
+### 6. Structured Output (JSON/YAML)
+
+The tool provides comprehensive structured output with a published JSON schema:
+
+**Schema Features**:
+- Complete metadata about the analysis performed
+- Detailed input information (IP source, sender domain, etc.)
+- Rich contact information with confidence scores and sources
+- Full escalation paths with levels, organizations, and effectiveness ratings
+- Performance statistics and query metrics
+- Warnings and result quality assessments
+
+**Schema URL**: `https://raw.githubusercontent.com/ochronus/abusedetector/main/schema/output.json`
+
+**Example JSON Structure**:
+```json
+{
+  "metadata": {
+    "tool_name": "abusedetector",
+    "version": "0.1.0",
+    "schema_version": "1.0.0"
+  },
+  "input": {
+    "ip_address": "69.72.43.14",
+    "sender_domain": "example.com",
+    "input_method": "eml_file"
+  },
+  "primary_contacts": [...],
+  "escalation_paths": {
+    "email_infrastructure": {...},
+    "sender_hosting": {...}
+  },
+  "result": {
+    "success": true,
+    "result_quality": "excellent"
+  }
+}
+```
 
 ---
 
@@ -317,6 +379,19 @@ for eml in *.eml; do
 done
 ```
 
+### Pattern 5: Structured Data Export
+```bash
+# Export to JSON for automation/integration
+abusedetector --eml suspicious.eml --json --show-escalation > report.json
+
+# Export to YAML for documentation
+abusedetector --eml suspicious.eml --yaml --show-escalation > report.yaml
+
+# Validate against schema
+abusedetector --generate-schema > schema.json
+# Use with tools like ajv, jsonschema, etc.
+```
+
 ---
 
 ## Data Sources & Accuracy
@@ -410,10 +485,11 @@ abusedetector --eml "$EML_FILE" --show-escalation --verbose=2
 | **IPv6** | Not supported | Full AAAA / IPv6 WHOIS + reverse parsing |
 | **EML Parsing** | Heuristic, IPv4 only | Structured parsing & IPv6 + ARC trust scoring |
 | **Domain Derivation** | Simple suffix heuristic | Public Suffix List integration |
-| **Output Formats** | Plain text / batch line | JSON / YAML / machine-friendly formats |
+| **Output Formats** | ✅ JSON, YAML, Plain text, Batch | Enhanced automation support |
 | **Confidence Scoring** | Linear increments | Weighted scoring with source reliability models |
 | **Cloud Providers** | Static IP ranges | Dynamic API-based detection |
 | **Response Tracking** | Not implemented | Success/failure tracking for contacts |
+| **Schema Validation** | ✅ JSON Schema provided | Consumer code generation and validation |
 
 ---
 
@@ -473,6 +549,18 @@ abusedetector --batch --eml message.eml
 ```bash
 abusedetector --eml persistent-spam.eml --escalation-only
 # Output: Only escalation paths (useful for non-responsive primary contacts)
+```
+
+### JSON Export for Automation
+```bash
+abusedetector --eml message.eml --json --show-escalation > analysis.json
+# Output: Complete structured data for integration with other tools
+```
+
+### YAML Export for Documentation
+```bash
+abusedetector --eml message.eml --yaml --show-escalation > report.yaml
+# Output: Human-readable structured format for reports and documentation
 ```
 
 ---
@@ -600,9 +688,15 @@ abusedetector 1.2.3.4                          # Simple IP lookup
 abusedetector --eml mail.eml                   # Email analysis
 abusedetector --batch 1.2.3.4                  # Script-friendly output
 
+# Structured output formats
+abusedetector --eml mail.eml --json            # JSON output
+abusedetector --eml mail.eml --yaml            # YAML output
+abusedetector --generate-schema                # Generate JSON schema
+
 # Escalation paths
 abusedetector --eml mail.eml --show-escalation # Primary + escalation
 abusedetector --eml mail.eml --escalation-only # Escalation only
+abusedetector --eml mail.eml --json --show-escalation # JSON with escalation
 
 # Debugging
 abusedetector --verbose=5 1.2.3.4              # Full trace
@@ -613,6 +707,61 @@ abusedetector --no-use-whois-ip 1.2.3.4        # Skip IP WHOIS
 abusedetector --no-use-abusenet 1.2.3.4        # Skip abuse.net
 abusedetector --no-color 1.2.3.4               # Plain output
 ```
+
+---
+
+## Examples and Integration
+
+The `examples/` directory contains practical integration examples:
+
+### **JSON Schema Validation (`examples/validate_json.py`)**
+Python script for validating and processing abusedetector JSON output:
+
+```python
+# Validate output against schema
+python validate_json.py analysis.json
+
+# Generate formatted abuse report
+python validate_json.py --report analysis.json
+
+# Extract contact emails for automation
+python validate_json.py --contacts-only analysis.json
+```
+
+### **Automated Reporting Pipeline (`examples/automated_reporting.sh`)**
+Bash script for integrating into incident response workflows:
+
+```bash
+# Process suspicious emails automatically
+./automated_reporting.sh --output-dir /tmp/reports *.eml
+
+# Dry run with verbose output
+./automated_reporting.sh --dry-run --verbose suspicious/*.eml
+```
+
+### **Integration Patterns**
+
+**SOC/Incident Response:**
+```bash
+# Generate comprehensive analysis for case management
+abusedetector --eml incident.eml --json --show-escalation > case_analysis.json
+python validate_json.py --report case_analysis.json > case_summary.txt
+```
+
+**Threat Intelligence:**
+```bash
+# Extract IOCs for threat intelligence platforms
+contacts=$(python validate_json.py --contacts-only analysis.json)
+echo "Threat indicators: IP, domain, contacts: $contacts"
+```
+
+**Compliance Reporting:**
+```bash
+# Generate audit-ready documentation
+abusedetector --eml evidence.eml --yaml --show-escalation > compliance_report.yaml
+```
+
+See `examples/README.md` for detailed integration guides, configuration examples, and best practices.
 
 ---
 

@@ -180,9 +180,11 @@ pub async fn run_whois_phase(
 #[derive(Debug, Clone)]
 pub struct CymruAsnInfo {
     pub asn: u32,
+    #[allow(dead_code)]
     pub bgp_prefix: String,
     pub country: String,
     pub registry: String,
+    #[allow(dead_code)]
     pub allocated: String,
     pub as_name: String,
 }
@@ -271,12 +273,15 @@ mod tests {
             no_use_whois_ip: false,
             show_commands: false,
             batch: false,
+            json: false,
+            yaml: false,
             show_escalation: false,
             escalation_only: false,
             no_color: false,
             plain: false,
             cache: None,
-            cache_expire: 0,
+            cache_expire: 7 * 24 * 3600,
+            generate_schema: false,
         };
         // Temporarily point to a non-existent server by calling chain with an unlikely IP
         // (We rely on the default start server; errors are swallowed into Ok(()))
