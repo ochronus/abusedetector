@@ -37,6 +37,7 @@ pub mod facade;
 pub mod netutil;
 pub mod output;
 pub mod retry;
+pub mod sources;
 pub mod structured_output;
 pub mod styled_output;
 pub mod whois;
