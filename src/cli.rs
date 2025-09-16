@@ -51,6 +51,22 @@ pub struct Cli {
     #[arg(long)]
     pub batch: bool,
 
+    /// Show escalation path when primary contacts are found
+    #[arg(long)]
+    pub show_escalation: bool,
+
+    /// Always show escalation path even if no primary contacts found
+    #[arg(long)]
+    pub escalation_only: bool,
+
+    /// Disable colored/styled output
+    #[arg(long)]
+    pub no_color: bool,
+
+    /// Use plain text output instead of styled
+    #[arg(long)]
+    pub plain: bool,
+
     /// Cache directory (future feature, currently not used)
     #[arg(long)]
     pub cache: Option<String>,
@@ -84,5 +100,15 @@ impl Cli {
     /// Are error-level messages enabled?
     pub fn error_enabled(&self) -> bool {
         self.verbose >= 1
+    }
+
+    /// Should we show escalation information?
+    pub fn should_show_escalation(&self) -> bool {
+        self.show_escalation || self.escalation_only
+    }
+
+    /// Should we use styled/colored output?
+    pub fn should_use_styling(&self) -> bool {
+        !self.no_color && !self.plain && !self.batch
     }
 }

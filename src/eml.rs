@@ -30,6 +30,51 @@ use regex::Regex;
 
 use crate::netutil::{is_private, is_reserved};
 
+/// Extract the sender domain from an EML file's From header.
+///
+/// Returns the domain part of the From header (e.g., "carebrain.co" from "melissanash@carebrain.co")
+pub fn extract_sender_domain_from_path<P: AsRef<Path>>(path: P) -> Result<Option<String>> {
+    let content = fs::read_to_string(&path)
+        .map_err(|e| anyhow!("Failed to read {:?}: {e}", path.as_ref()))?;
+    Ok(extract_sender_domain(&content))
+}
+
+/// Extract the sender domain from raw EML content.
+pub fn extract_sender_domain(content: &str) -> Option<String> {
+    // Get header block (stop at first blank line)
+    let header_end = content.find("\n\n").unwrap_or(content.len());
+    let headers_raw = &content[..header_end];
+
+    // Unfold headers
+    let unfolded = unfold_headers(headers_raw);
+
+    // Look for From: header - try various patterns
+    let from_patterns = [
+        r"(?im)^\s*From:\s*.*?<([^@]+@([^>]+))>", // "Name <email@domain.com>"
+        r"(?im)^\s*From:\s*([^@\s]+@([^\s]+))",   // "email@domain.com"
+    ];
+
+    for pattern in &from_patterns {
+        if let Ok(re) = Regex::new(pattern) {
+            if let Some(caps) = re.captures(&unfolded) {
+                if let Some(domain_match) = caps.get(2) {
+                    let domain = domain_match
+                        .as_str()
+                        .trim()
+                        .trim_end_matches('>')
+                        .to_lowercase();
+                    // Basic validation - should contain at least one dot
+                    if domain.contains('.') && !domain.is_empty() {
+                        return Some(domain);
+                    }
+                }
+            }
+        }
+    }
+
+    None
+}
+
 /// Extract the originating public IPv4 address from an on-disk `.eml` file.
 ///
 /// Returns an error if:

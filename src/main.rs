@@ -3,20 +3,24 @@ mod config;
 mod emails;
 mod eml;
 mod errors;
+mod escalation;
 mod netutil;
 mod output;
 mod retry;
+mod styled_output;
 mod whois;
 
 use cli::Cli;
 use config::Config;
 use emails::{soa_rname_to_email, EmailSet, FinalizeOptions};
 use errors::{AbuseDetectorError, Result};
+use escalation::{DualEscalationPath, EscalationPath};
 use netutil::{domain_of, ipv4_to_inaddr, is_private, is_reserved, parse_ipv4, reverse_dns};
 use output::{
     AbuseContact, AbuseResults, ContactMetadata, ContactSource, OutputFormat, QueryMetadata,
 };
 use std::time::{Duration, Instant};
+use styled_output::StyledFormatter;
 use trust_dns_resolver::{
     config::{ResolverConfig, ResolverOpts},
     proto::rr::{Name, RecordType},
@@ -40,11 +44,21 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
-    // Determine IP: either directly from --ip or derived from --eml file
-    let (ip, from_eml, eml_file) = if let Some(ref eml_path) = cli.eml {
+    // Determine IP and sender domain: either directly from --ip or derived from --eml file
+    let (ip, from_eml, eml_file, sender_domain) = if let Some(ref eml_path) = cli.eml {
         if cli.is_trace() {
             eprintln!("Deriving originating IP from EML file: {eml_path}");
         }
+
+        let sender_domain = eml::extract_sender_domain_from_path(eml_path).unwrap_or(None);
+
+        if let Some(ref domain) = sender_domain {
+            if cli.is_trace() {
+                eprintln!("Sender domain extracted from EML: {domain}");
+            }
+            println!("Detected sender domain (from EML): {domain}");
+        }
+
         match eml::parse_eml_origin_ip_from_path(eml_path) {
             Ok(found) => {
                 if cli.is_trace() {
@@ -52,7 +66,7 @@ async fn main() -> Result<()> {
                 }
                 // Always log the detected sender IP in EML mode (user-visible)
                 println!("Detected sender IP (from EML): {found}");
-                (found, true, Some(eml_path.clone()))
+                (found, true, Some(eml_path.clone()), sender_domain)
             }
             Err(e) => {
                 if cli.error_enabled() {
@@ -66,6 +80,7 @@ async fn main() -> Result<()> {
         (
             parse_ipv4(ip_str).map_err(|_| AbuseDetectorError::InvalidIpAddress(ip_str.clone()))?,
             false,
+            None,
             None,
         )
     } else {
@@ -191,34 +206,120 @@ async fn main() -> Result<()> {
         metadata,
     };
 
-    // Determine output format
-    let output_format = if cli.batch {
-        OutputFormat::Batch
-    } else if cli.show_internal() {
-        OutputFormat::Text {
-            show_confidence: true,
-            show_sources: true,
-            show_metadata: cli.is_trace(),
+    // Generate dual escalation paths if requested or if no primary contacts found
+    let dual_escalation = if cli.should_show_escalation() || results.contacts.is_empty() {
+        match DualEscalationPath::from_eml_analysis(ip, hostname.clone(), sender_domain).await {
+            Ok(paths) => Some(paths),
+            Err(e) => {
+                if cli.warn_enabled() {
+                    eprintln!("Warning: Could not generate escalation paths: {}", e);
+                }
+                None
+            }
         }
     } else {
-        OutputFormat::Text {
-            show_confidence: false,
-            show_sources: false,
-            show_metadata: false,
-        }
+        None
     };
 
-    // Format and output results
-    let formatter = output::create_formatter(&output_format);
-    let output_text = formatter.format_results(&results).map_err(|e| {
-        AbuseDetectorError::Configuration(format!("Output formatting failed: {}", e))
-    })?;
+    // Use styled output if enabled and not in batch mode
+    if cli.should_use_styling() && !cli.batch {
+        let formatter = if cli.no_color {
+            StyledFormatter::without_colors()
+        } else {
+            StyledFormatter::new()
+        };
 
-    print!("{}", output_text);
+        if let Err(e) =
+            formatter.print_results_with_dual_escalation(&results, dual_escalation.as_ref())
+        {
+            eprintln!("Error formatting styled output: {}", e);
+            // Fall back to plain text output
+            let output_format = OutputFormat::Text {
+                show_confidence: cli.show_internal(),
+                show_sources: cli.show_internal(),
+                show_metadata: cli.is_trace(),
+            };
+            let formatter = output::create_formatter(&output_format);
+            let output_text = formatter.format_results(&results).map_err(|e| {
+                AbuseDetectorError::Configuration(format!("Output formatting failed: {}", e))
+            })?;
+            print!("{}", output_text);
+        }
+    } else {
+        // Use traditional output format
+        let output_format = if cli.batch {
+            OutputFormat::Batch
+        } else if cli.show_internal() {
+            OutputFormat::Text {
+                show_confidence: true,
+                show_sources: true,
+                show_metadata: cli.is_trace(),
+            }
+        } else {
+            OutputFormat::Text {
+                show_confidence: false,
+                show_sources: false,
+                show_metadata: false,
+            }
+        };
+
+        let formatter = output::create_formatter(&output_format);
+        let output_text = formatter.format_results(&results).map_err(|e| {
+            AbuseDetectorError::Configuration(format!("Output formatting failed: {}", e))
+        })?;
+
+        print!("{}", output_text);
+
+        // If using plain output but escalation was requested, show it separately
+        if let Some(ref paths) = dual_escalation {
+            if cli.should_show_escalation() {
+                println!("\n--- EMAIL INFRASTRUCTURE ESCALATION PATH ---");
+                println!("(For stopping email sending abuse)");
+                for (i, contact) in paths.get_email_infrastructure_contacts().iter().enumerate() {
+                    println!(
+                        "{}. {} - {}",
+                        i + 1,
+                        contact.contact_type.display_name(),
+                        contact.organization
+                    );
+                    if let Some(ref email) = contact.email {
+                        println!("   Email: {}", email);
+                    }
+                    if let Some(ref form) = contact.web_form {
+                        println!("   Web Form: {}", form);
+                    }
+                    println!();
+                }
+
+                if let Some(hosting_contacts) = paths.get_sender_hosting_contacts() {
+                    if !hosting_contacts.is_empty() {
+                        println!("\n--- SENDER HOSTING ESCALATION PATH ---");
+                        println!("(For stopping website/business abuse)");
+                        for (i, contact) in hosting_contacts.iter().enumerate() {
+                            println!(
+                                "{}. {} - {}",
+                                i + 1,
+                                contact.contact_type.display_name(),
+                                contact.organization
+                            );
+                            if let Some(ref email) = contact.email {
+                                println!("   Email: {}", email);
+                            }
+                            if let Some(ref form) = contact.web_form {
+                                println!("   Web Form: {}", form);
+                            }
+                            println!();
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     // If no results and verbose, hint user
-    if results.contacts.is_empty() && cli.error_enabled() {
-        eprintln!("No abuse contacts discovered.");
+    if results.contacts.is_empty() && cli.error_enabled() && dual_escalation.is_none() {
+        eprintln!("No abuse contacts discovered and escalation paths unavailable.");
+        eprintln!("Try using --show-escalation to see alternative contact methods.");
     }
 
     Ok(())

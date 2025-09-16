@@ -30,16 +30,20 @@ pub mod config;
 pub mod emails;
 pub mod eml;
 pub mod errors;
+pub mod escalation;
 pub mod netutil;
 pub mod output;
 pub mod retry;
+pub mod styled_output;
 pub mod whois;
 
 // Re-export commonly used types and functions for convenience
 pub use emails::{EmailSet, FinalizeOptions};
 pub use errors::{AbuseDetectorError, Result};
+pub use escalation::{EscalationContactType, EscalationPath};
 pub use netutil::{is_private, is_reserved, parse_ipv4};
 pub use output::{AbuseContact, AbuseResults, ContactSource, OutputFormat};
+pub use styled_output::StyledFormatter;
 
 // Version information
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

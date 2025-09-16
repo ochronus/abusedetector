@@ -176,6 +176,62 @@ pub async fn run_whois_phase(
     Ok(())
 }
 
+/// Team Cymru ASN information structure
+#[derive(Debug, Clone)]
+pub struct CymruAsnInfo {
+    pub asn: u32,
+    pub bgp_prefix: String,
+    pub country: String,
+    pub registry: String,
+    pub allocated: String,
+    pub as_name: String,
+}
+
+/// Query Team Cymru for ASN information about an IP address.
+///
+/// Returns detailed ASN information that's often missing from regular WHOIS.
+/// Format: "AS | IP | BGP Prefix | CC | Registry | Allocated | AS Name"
+pub async fn query_cymru_asn(ip: Ipv4Addr, opts: &Cli) -> Result<CymruAsnInfo> {
+    let query = format!(" -v {}", ip);
+
+    if opts.show_commands {
+        eprintln!("(cmd) whois -h whois.cymru.com '{}'", query);
+    }
+    if opts.is_trace() {
+        eprintln!("Querying Team Cymru for ASN info: {}", ip);
+    }
+
+    let resp = simple_whois("whois.cymru.com", &query, Duration::from_secs(8)).await?;
+
+    // Parse response: "396479  | 204.220.184.46   | 204.220.184.0/24    | US | arin     | 1995-01-05 | MAILGUN-, US"
+    for line in resp.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with("AS") {
+            continue; // Skip header line
+        }
+
+        let parts: Vec<&str> = line.split('|').map(|s| s.trim()).collect();
+        if parts.len() >= 7 {
+            if let Ok(asn) = parts[0].parse::<u32>() {
+                if opts.is_trace() {
+                    eprintln!("  Cymru ASN => AS{} ({})", asn, parts[6]);
+                }
+
+                return Ok(CymruAsnInfo {
+                    asn,
+                    bgp_prefix: parts[2].to_string(),
+                    country: parts[3].to_string(),
+                    registry: parts[4].to_uppercase(),
+                    allocated: parts[5].to_string(),
+                    as_name: parts[6].to_string(),
+                });
+            }
+        }
+    }
+
+    Err(anyhow!("No ASN information found in Cymru response"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -215,6 +271,10 @@ mod tests {
             no_use_whois_ip: false,
             show_commands: false,
             batch: false,
+            show_escalation: false,
+            escalation_only: false,
+            no_color: false,
+            plain: false,
             cache: None,
             cache_expire: 0,
         };

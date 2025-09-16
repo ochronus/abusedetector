@@ -36,6 +36,8 @@ fn test_ip_lookup_public_address() {
     let output = Command::new(&binary)
         .arg("8.8.8.8")
         .arg("--verbose=0") // Silent mode for clean output
+        .arg("--plain") // Use plain text output
+        .arg("--batch") // Use batch format for predictable output
         .output()
         .expect("Failed to execute binary");
 
@@ -44,18 +46,21 @@ fn test_ip_lookup_public_address() {
 
     // Should not be empty (should find some contact)
     let stdout = str::from_utf8(&output.stdout).unwrap();
-    // We can't guarantee specific contacts, but output should not be empty
-    // and should be valid email format if any contacts found
+    // With batch format, output should be in format "ip:email1,email2"
     if !stdout.trim().is_empty() {
-        for line in stdout.lines() {
-            if !line.trim().is_empty() {
-                assert!(
-                    line.contains('@'),
-                    "Output should contain email addresses: {}",
-                    line
-                );
-            }
-        }
+        // Should contain the IP and colon format
+        assert!(
+            stdout.contains("8.8.8.8:"),
+            "Output should contain IP with colon: {}",
+            stdout
+        );
+
+        // Should contain at least one email address
+        assert!(
+            stdout.contains('@'),
+            "Output should contain email addresses: {}",
+            stdout
+        );
     }
 }
 
