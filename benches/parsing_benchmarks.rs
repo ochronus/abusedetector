@@ -116,7 +116,7 @@ fn bench_ip_classification(c: &mut Criterion) {
     group.bench_function("is_private", |b| {
         b.iter(|| {
             for ip in &test_ips {
-                black_box(netutil::is_private(*ip));
+                black_box(netutil::is_private(std::net::IpAddr::V4(*ip)));
             }
         })
     });
@@ -124,7 +124,7 @@ fn bench_ip_classification(c: &mut Criterion) {
     group.bench_function("is_reserved", |b| {
         b.iter(|| {
             for ip in &test_ips {
-                black_box(netutil::is_reserved(*ip));
+                black_box(netutil::is_reserved(std::net::IpAddr::V4(*ip)));
             }
         })
     });
@@ -143,7 +143,7 @@ fn bench_ip_classification(c: &mut Criterion) {
 
         b.iter(|| {
             for ip_str in &ip_strings {
-                let _ = black_box(netutil::parse_ipv4(ip_str));
+                let _ = black_box(netutil::parse_ip(ip_str));
             }
         })
     });
@@ -245,7 +245,7 @@ fn bench_domain_operations(c: &mut Criterion) {
 
         b.iter(|| {
             for ip in &test_ips {
-                black_box(netutil::ipv4_to_inaddr(*ip));
+                black_box(netutil::ip_to_inaddr(std::net::IpAddr::V4(*ip)));
             }
         })
     });

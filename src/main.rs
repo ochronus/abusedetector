@@ -1,39 +1,26 @@
 use std::net::Ipv4Addr;
 use std::time::{Duration, Instant};
 
-mod cli;
-mod config;
-mod domain_utils;
-mod emails;
-mod eml;
-mod errors;
-mod escalation;
-mod netutil;
-mod output;
-mod retry;
-mod structured_output;
-mod styled_output;
-mod whois;
-
-use cli::{Cli, OutputFormat};
-use config::Config;
-use emails::{soa_rname_to_email, EmailSet, FinalizeOptions};
-use eml::IpExtractionResult;
-use errors::{AbuseDetectorError, Result};
-use escalation::DualEscalationPath;
-use netutil::{domain_of, ip_to_inaddr, is_private, is_reserved, reverse_dns};
-use output::{
+use abusedetector::cli::{Cli, OutputFormat};
+use abusedetector::config::Config;
+use abusedetector::domain_utils;
+use abusedetector::emails::{soa_rname_to_email, EmailSet, FinalizeOptions};
+use abusedetector::eml::{self, IpExtractionResult};
+use abusedetector::errors::{AbuseDetectorError, Result};
+use abusedetector::escalation::DualEscalationPath;
+use abusedetector::netutil::{domain_of, ip_to_inaddr, is_private, is_reserved, reverse_dns};
+use abusedetector::output::{
     AbuseContact, AbuseResults, ContactMetadata, ContactSource, OutputFormat as OutputFormatOrig,
     QueryMetadata,
 };
-use structured_output::AbuseDetectorOutput;
-use styled_output::StyledFormatter;
+use abusedetector::structured_output::{self, AbuseDetectorOutput};
+use abusedetector::styled_output::StyledFormatter;
+use abusedetector::whois::{query_abuse_net, whois_ip_chain};
 use trust_dns_resolver::{
     config::{ResolverConfig, ResolverOpts},
     proto::rr::{Name, RecordType},
     TokioAsyncResolver,
 };
-use whois::{query_abuse_net, whois_ip_chain};
 
 /// Placeholder IP used when no public IPv4 could be extracted (domain fallback mode)
 const FALLBACK_IP: Ipv4Addr = Ipv4Addr::new(0, 0, 0, 0);
@@ -458,7 +445,7 @@ async fn main() -> Result<()> {
         }
     };
 
-    let formatter = output::create_formatter(&output_format);
+    let formatter = abusedetector::output::create_formatter(&output_format);
     let plain = formatter
         .format_results(&results)
         .map_err(|e| AbuseDetectorError::Configuration(format!("Output formatting failed: {e}")))?;

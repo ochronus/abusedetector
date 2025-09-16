@@ -1,0 +1,79 @@
+Delivered-To: xxx@xx.xx
+Received: by 2002:a05:6020:73c8:b0:66a:7b29:2f00 with SMTP id g8csp354367wdq;
+        Tue, 16 Sep 2025 06:54:07 -0700 (PDT)
+X-Google-Smtp-Source: AGHT+IGcrS2X+hiotvPFMUTdGlE83kN/y4B0dBmTA0fB+v/bhuYHsiiLcd9NuEeFfrPU1oiWsWLw
+X-Received: by 2002:a17:907:3d8c:b0:afe:8b53:449c with SMTP id a640c23a62f3a-b07c37dc9f1mr1539037066b.34.1758030847590;
+        Tue, 16 Sep 2025 06:54:07 -0700 (PDT)
+ARC-Seal: i=1; a=rsa-sha256; t=1758030847; cv=none;
+        d=google.com; s=arc-20240605;
+        b=hrbCiNMXdFTECafGYRJKUzwxgoQPOckeNd5Uj5a3xs/OAu8oAcyzmIVuHMPu9LhhZe
+         sysGrrd/lshdTyMaSg11i8sHXqLxnj6EK9jvMV8My9lXDrVK4BP8apx1nxm2sI2D16aw
+         Hv1lc6NRFYxGgyBYLoZZACDehiglWi+rbTKvwQ6FMnI0+ea3i8gc/huG24YNVsgTCuxJ
+         Z2gFc0vkALtTNbRkeBZFEydV5PGznAhX5OSSJ351Fx1Qxt0fPsw5xhFVX2JPVidEItAj
+         PnTbFXxg1eyg5mDwgj4q00XxVVwG5mbnkk13Kf7w6VD4mHj6cgwxK7AOc+OgUMjJiUz0
+         xFog==
+ARC-Message-Signature: i=1; a=rsa-sha256; c=relaxed/relaxed; d=google.com; s=arc-20240605;
+        h=mime-version:reply-to:precedence:list-unsubscribe
+         :list-unsubscribe-post:feedback-id:message-id:date:to:from:subject
+         :dkim-signature:dkim-signature;
+        bh=cGknsuSEcSxOtze2j76ZRYT2/FEvJ4zBJN8LRPUupaE=;
+        fh=ZsqzNK9gbXGd4ngiZ1j5z58aUDyx9spVbcVjL9UZRME=;
+        b=DnvM5dudfViox+QsSPPn8bnfDLL46ERlHcl9/8zioe4k50VB1eKWEldo601Ubm+SEw
+         31I2zVB2teJtph9UKDKaU91LcK5CIeb+PDF4WSk914u3U0G1H2HClaIVKgmgs8nI8Mh7
+         hvUFkqx5BOgkWVbEovv4pFQKdbZT3uQjQOk8eeKcNtYoDLpz9rfW7M/QMwrr0Z+k3m0h
+         3JM2doGrZLeNjEHI+C9I65JTm8GB8OxHjkzyytkG7q+HZiWbkiTOivPUJSRq+weMatD7
+         7J3K1gV7KowXpUrkW97roFyhlWl3cu/U6U1dIWb2Y5pb3apiqyEDkJywajt8H/HvODyU
+         dGkw==;
+        dara=google.com
+ARC-Authentication-Results: i=1; mx.google.com;
+       dkim=pass header.i=@resolutemarket.com header.s=litesrv header.b=NSh4C2ii;
+       dkim=pass header.i=@mlsend.com header.s=litesrv header.b=QdrK53Is;
+       spf=pass (google.com: domain of bounce-165707299212494541a1741640@mlsend.com designates 185.225.161.25 as permitted sender) smtp.mailfrom=bounce-165707299212494541a1741640@mlsend.com;
+       dmarc=pass (p=QUARANTINE sp=QUARANTINE dis=NONE) header.from=resolutemarket.com
+Return-Path: <bounce-165707299212494541a1741640@mlsend.com>
+Received: from mail025.mlsend.com (mail025.mlsend.com. [185.225.161.25])
+        by mx.google.com with ESMTPS id a640c23a62f3a-b07bdb98195si693953166b.932.2025.09.16.06.54.07
+        for <xxx@xx.xx>
+        (version=TLS1_3 cipher=TLS_AES_128_GCM_SHA256 bits=128/128);
+        Tue, 16 Sep 2025 06:54:07 -0700 (PDT)
+Received-SPF: pass (google.com: domain of bounce-165707299212494541a1741640@mlsend.com designates 185.225.161.25 as permitted sender) client-ip=185.225.161.25;
+Authentication-Results: mx.google.com;
+       dkim=pass header.i=@resolutemarket.com header.s=litesrv header.b=NSh4C2ii;
+       dkim=pass header.i=@mlsend.com header.s=litesrv header.b=QdrK53Is;
+       spf=pass (google.com: domain of bounce-165707299212494541a1741640@mlsend.com designates 185.225.161.25 as permitted sender) smtp.mailfrom=bounce-165707299212494541a1741640@mlsend.com;
+       dmarc=pass (p=QUARANTINE sp=QUARANTINE dis=NONE) header.from=resolutemarket.com
+DKIM-Signature: a=rsa-sha256; bh=cGknsuSEcSxOtze2j76ZRYT2/FEvJ4zBJN8LRPUupaE=;
+ c=relaxed/relaxed; d=resolutemarket.com;
+ h=DKIM-Signature:X-Mailer-Info:Subject:From:To:Date:Received:Message-ID:x-mailer-recipientid:Feedback-ID:List-Unsubscribe-Post:List-Unsubscribe:Precedence:X-Mailru-Msgtype:X-CampaignID:Reply-To:MIME-Version:Content-Type;
+ s=litesrv; t=1758030844; v=1;
+ b=NSh4C2iifGXx3DDexz3V0uNhuksgavSJRUpp8F6w6pG/escOKhFhcCy2muQSnloT3xxFt1dD
+ u6prVxCdoR0o6sJluKlIm5ysu/XwIh8izm4euRbC2w5QuaBIiBLbeHlEJMOhT1l2H8MhW9Xweqa
+ dzOIuqc5f+RHgWC9Z263PVMQ=
+DKIM-Signature: a=rsa-sha256; bh=cGknsuSEcSxOtze2j76ZRYT2/FEvJ4zBJN8LRPUupaE=;
+ c=relaxed/relaxed; d=mlsend.com;
+ h=X-Mailer-Info:Subject:From:To:Date:Received:Message-ID:x-mailer-recipientid:Feedback-ID:List-Unsubscribe-Post:List-Unsubscribe:Precedence:X-Mailru-Msgtype:X-CampaignID:Reply-To:MIME-Version:Content-Type;
+ s=litesrv; t=1758030844; v=1;
+ b=QdrK53IsBEr91rB7MWw5N787G1Nm9rW/O7SXDzx+vSP6RHfO+fK7ESlFxYoqLdXpyY94s6AR
+ q6ts8KnGWn+nC23GGyxGTzBk//GdwLzw7a1ppxNrDeEbaBXGEBAj/g273vQt4wr6SsLIYq6+T0D
+ 238HsXIqcY4uNTr7Wla3v3kk=
+X-Mailer-Info: 10.MWYtBXYpdmb.MWYtBXYpdmbxYTN2kTOwgDMxYDMygjM1AzM.jNXYiFmLvtm
+ cv5WYAV2Z51mLj9Wb.EjN1cDM3ITO5ITMyQTO0UDNxEWM3QTM2QDM....
+Subject: DEMO SUBJECT
+From: Mohammad Rasim - Revive ME <reviveme@resolutemarket.com>
+To: Csaba <xxx@xx.xx>
+Date: 16 Sep 2025 13:54:04 -0000
+Received: from 10.36.35.17 by 10.164.0.44 with http; 16 Sep 2025 13:54:04 +0000
+Message-ID: <165707299212494541a1741640@mlsend.com>
+x-mailer-recipientid: 165707299212494541a1741640
+Feedback-ID: campaign165699080146651014:1741640:campaign:MailerLite
+List-Unsubscribe-Post: List-Unsubscribe=One-Click
+List-Unsubscribe: <https://rdlqgrr.clicks.mlsend.com/ty/c/eyJ2Ijoie1wiYVwiOjE3NDE2NDAsXCJsXCI6MTY1NzA3Mjg3ODE3NjE4ODEzLFwiclwiOjE2NTcwNzI5OTIxMjQ5NDU0MX0iLCJzIjoiZDIzNmY3YzFhNTU3ZjY3MyJ9>
+Precedence: bulk
+X-Mailru-Msgtype: 165707299212494541
+X-CampaignID: 165699080160282503
+Reply-To: Mohammad Rasim - Revive ME <reviveme@resolutemarket.com>
+MIME-Version: 1.0
+Content-Type: multipart/alternative;
+ boundary="==975eae00c23ae79721280bbf66d474b7"
+
+DEMO BODY

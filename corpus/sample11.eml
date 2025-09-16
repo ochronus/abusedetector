@@ -1,0 +1,68 @@
+Delivered-To: xxx@xx.xx
+Received: by 2002:a05:6020:73c8:b0:66a:7b29:2f00 with SMTP id g8csp368109wdq;
+        Tue, 16 Sep 2025 07:10:33 -0700 (PDT)
+X-Google-Smtp-Source: AGHT+IGWKQiYwZcdGzJE5pZxtaNuN+AOME+XVlW/zIl7pDk6wqbmffTqHKc7iLfRAJtgvatN1I72
+X-Received: by 2002:a05:6000:420f:b0:3e5:394d:10bb with SMTP id ffacd0b85a97d-3e7659e78b6mr13820918f8f.41.1758031833552;
+        Tue, 16 Sep 2025 07:10:33 -0700 (PDT)
+ARC-Seal: i=1; a=rsa-sha256; t=1758031833; cv=none;
+        d=google.com; s=arc-20240605;
+        b=kdoafSd3hYozEHdClBW46pRXygl0PQOZCIHzM4J10j3dyianV+rFDoe9eAqkdOgGKg
+         H8rFufSDWiNZUbIpm6COzcUqOZkD1uRD+a5EOWYTPIr34e9h1/vgcFWtbaHtFtxTc++i
+         Mj7paL66XzcDYZ5IJ+Yd/LvuphzKT5LDdjdbj9jfODjpu1zUQIbmo31cIiYhFbIqpeAR
+         Tww/Q/S5EiUso+AXOZ8HOKC/C+6C4tTHwtTWLkyH9fZFUit8FOUKZQ7SshS7egFI+jG0
+         LlUV+I4ucHcmUkB2PaXKOjFATaWZmYHcrqBrA7ex3p3RAr3zyYg6xyweN4Q0d3Aj+gfS
+         /ToQ==
+ARC-Message-Signature: i=1; a=rsa-sha256; c=relaxed/relaxed; d=google.com; s=arc-20240605;
+        h=message-id:reply-to:list-unsubscribe-post:list-unsubscribe
+         :mime-version:list-help:date:subject:to:from:dkim-signature;
+        bh=mCmzDKlsef3oJty4N4PiuXeW1A+y1wLUZRmED1XJcbM=;
+        fh=7u0qFDLUejZPXQCQ8VtsiIzUMY4LLkxZ0VBpIJ2h6Ss=;
+        b=EpHuznZ1wYe07p6rV1MmgxB6ZAtHyJt/k8rt1MotebYpn7IV9tAf200f7Z62sbcMtw
+         N4oNTGUwzK+mslUugD4SlttoZXq5qDrfunavRZN2LfX0+2+EJtTNXwTxlAp6wxU2Ts4L
+         yIzd8t2fPUZrfX9g67zT0UuNGVK9QmXALGnPkoFeIbA26kR1nxvH9CdeQ0smxPU3PM46
+         ngw/eZ2v79U0YwqhiSNOXr3jYRA3Q9Wh5V2qVV1wtTZ/cnD9ohiDPaHVLJSJjanRbblW
+         3pHaN7t0UM3trbYPMCGvPhQ8+C1U059spGTvOoNL9eWL6V5YdAd8EGkHCH7GXWWojMkm
+         XYdw==;
+        dara=google.com
+ARC-Authentication-Results: i=1; mx.google.com;
+       dkim=pass header.i=@acoustic.com header.s=200608 header.b=pq+dSSWk;
+       spf=pass (google.com: domain of bounce-81026_html-1774578198-117622-514020424-355254@bounce.s11.mc.pd25.com designates 13.111.74.187 as permitted sender) smtp.mailfrom=bounce-81026_HTML-1774578198-117622-514020424-355254@bounce.s11.mc.pd25.com;
+       dmarc=pass (p=NONE sp=NONE dis=NONE) header.from=acoustic.com
+Return-Path: <bounce-81026_HTML-1774578198-117622-514020424-355254@bounce.s11.mc.pd25.com>
+Received: from ij187.mta.exacttarget.com (ij187.mta.exacttarget.com. [13.111.74.187])
+        by mx.google.com with ESMTPS id 6a1803df08f44-763b3f41169si65880756d6.65.2025.09.16.07.10.33
+        for <xxx@xx.xx>
+        (version=TLS1_2 cipher=ECDHE-ECDSA-AES128-GCM-SHA256 bits=128/128);
+        Tue, 16 Sep 2025 07:10:33 -0700 (PDT)
+Received-SPF: pass (google.com: domain of bounce-81026_html-1774578198-117622-514020424-355254@bounce.s11.mc.pd25.com designates 13.111.74.187 as permitted sender) client-ip=13.111.74.187;
+Authentication-Results: mx.google.com;
+       dkim=pass header.i=@acoustic.com header.s=200608 header.b=pq+dSSWk;
+       spf=pass (google.com: domain of bounce-81026_html-1774578198-117622-514020424-355254@bounce.s11.mc.pd25.com designates 13.111.74.187 as permitted sender) smtp.mailfrom=bounce-81026_HTML-1774578198-117622-514020424-355254@bounce.s11.mc.pd25.com;
+       dmarc=pass (p=NONE sp=NONE dis=NONE) header.from=acoustic.com
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; s=200608; d=acoustic.com;
+ h=From:To:Subject:Date:List-Help:MIME-Version:List-Unsubscribe:
+ List-Unsubscribe-Post:Reply-To:Message-ID:Content-Type; i=info@acoustic.com;
+ bh=mCmzDKlsef3oJty4N4PiuXeW1A+y1wLUZRmED1XJcbM=;
+ b=pq+dSSWkiTtjH+b45vLLw7j4WEZ9+6qyz4borRhQhqJOtHZulJ3a+Q++DtRoDLur8WlqmTaBEQGw
+   OUddGe0tKAUhiLU9Y9u6HuMNyn7IXIie9t90o5dd3cB/gUUwahuVECtCy3CzDPhqNVXp2FYI3y+U
+   AuYIkwxIS6dVl+WjmvE=
+Received: by ij187.mta.exacttarget.com id hp5nti2fmd47 for <xxx@xx.xx>; Tue, 16 Sep 2025 14:10:31 +0000 (envelope-from <bounce-81026_HTML-1774578198-117622-514020424-355254@bounce.s11.mc.pd25.com>)
+From: "Acoustic" <info@acoustic.com>
+To: <xxx@xx.xx>
+Subject: DEMO SUBJECT
+Date: Tue, 16 Sep 2025 08:10:31 -0600
+List-Help: <https://cl.s11.exct.net/subscription_center.aspx?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJtaWQiOiI1MTQwMjA0MjQiLCJzIjoiMTc3NDU3ODE5OCIsImxpZCI6IjgxMDI2IiwiaiI6IjExNzYyMiIsImpiIjoiMzU1MjU0IiwiZCI6IjExMDA1MiJ9.nL0bGRGpd7NpHkajYD-rQ_jn2Nvw72vo2tubgVANtFM>
+MIME-Version: 1.0
+x-messageKey: 959062-941186184-62112160
+X-Delivery: Transactional
+X-SFMC-Stack: 11
+x-job: 514020424_117622
+List-Unsubscribe: <https://go.acoustic.com/listUnsubscribeHeader/u/959062/ab1eecabd3fedb74afaf9233994976a609fbc6d9cf3da47ede82e8b3f6187db6/942686299>
+List-Unsubscribe-Post: List-Unsubscribe=One-Click
+X-Report-Abuse-To: abuse@pd25.com
+Reply-To: info@acoustic.com
+Message-ID: <269a7a87-3f7f-48f9-84ba-57176c31e943@atl1s11mta94.xt.local>
+Content-Type: multipart/alternative;
+	boundary="rcqHOpmd19RU=_?:"
+
+DEMO BODY

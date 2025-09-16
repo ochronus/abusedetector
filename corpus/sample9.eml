@@ -1,0 +1,164 @@
+Delivered-To: xxx@xxx.xxx
+Received: by 2002:a05:6020:73c8:b0:66a:7b29:2f00 with SMTP id g8csp243238wdq;
+        Tue, 16 Sep 2025 03:52:05 -0700 (PDT)
+X-Google-Smtp-Source: AGHT+IGAqeW9IrAvs/yeJ7bwHNjkoPUY66VJl8de5NcRaju73y9V9AEXPl8Wn7LTHFjgIS5TfKX9
+X-Received: by 2002:a05:6000:2283:b0:3e7:48ab:7695 with SMTP id ffacd0b85a97d-3e7659f931fmr14056516f8f.59.1758019925458;
+        Tue, 16 Sep 2025 03:52:05 -0700 (PDT)
+ARC-Seal: i=2; a=rsa-sha256; t=1758019925; cv=pass;
+        d=google.com; s=arc-20240605;
+        b=fZ1eyV0k8cNsV23WsLlD6URppuNb2yLzSYhMUBH1aHPovbzi6/mcjLjhNYxsG0zJVj
+         wh32rUeKcBW+Z+aH8564+l4q94t1yBRtWolZUwI+YEKp+OhiUfUXVwpkXPdfWEyVu3I6
+         7U+X2yx0ZwC97/7uslmJk3R1yHXgGEOvFSdPQwLX1RZrBWdgdbmEXLRYPIIoiqsPGJYJ
+         USb66hJd++walVFwBfTSkoFW3v670bffrNv9NOfpPpJU63qzFdI7Z0awLHsK/BfbE8AI
+         ljrbfe7nWMdO+NMAkpi7161STjKr5QgQ1YvhSZ9SYz3KTbfQfCGlCrRC7MsAU0xUrUNi
+         4exw==
+ARC-Message-Signature: i=2; a=rsa-sha256; c=relaxed/relaxed; d=google.com; s=arc-20240605;
+        h=mime-version:content-language:accept-language:message-id:date
+         :thread-index:thread-topic:subject:to:from:dkim-signature;
+        bh=aS7s0d9jXInoCMA2mS5ctgfHwQA9rHtKFh9fK2mDNcc=;
+        fh=PJfgkcpCCbjfM+a25EoLyuILN8L8KvtS3kYmQjQoKXM=;
+        b=dbGB4e8We/AomyirCYEdie75re3Hi0TOmP7YFTJIzokHH38qqvn7srMEPulSHEuaQc
+         O6pbcbWONjf4OCv/q3eV5WFrsk1U3Kon7oHgnpWglxqOeVqgx2g0Vpx665A87aQdOeq9
+         wUXsiQ9inPGp56UsfAFmXmhF51Ou0qCCpmMItWWsZ0pkiX1pw8KzwfU/cnS8xUI5E0NB
+         EOAoCES7cV1tEbEBfYIDYJOPEcU9tk0BiZxMDtnq3SdE65HA5IVGtII3OOBkwRf4NTXV
+         UbfKUfo1j7+PVELWIDJPGSXdEO1FLNZMFlyckyV3wKNuRAGOR6b+CUUSg8B8ciHc5afD
+         21fQ==;
+        dara=google.com
+ARC-Authentication-Results: i=2; mx.google.com;
+       dkim=pass header.i=@ventionteams.com header.s=selector2 header.b=mxoeCQsY;
+       arc=pass (i=1 spf=pass spfdomain=ventionteams.com dkim=pass dkdomain=ventionteams.com dmarc=pass fromdomain=ventionteams.com);
+       spf=pass (google.com: domain of valeria.kliutko@ventionteams.com designates 2a01:111:f403:200a::620 as permitted sender) smtp.mailfrom=Valeria.Kliutko@ventionteams.com;
+       dmarc=pass (p=REJECT sp=REJECT dis=NONE) header.from=ventionteams.com
+Return-Path: <Valeria.Kliutko@ventionteams.com>
+Received: from NAM12-MW2-obe.outbound.protection.outlook.com (mail-mw2nam12on20620.outbound.protection.outlook.com. [2a01:111:f403:200a::620])
+        by mx.google.com with ESMTPS id 00721157ae682-72f791a3717si60310327b3.423.2025.09.16.03.52.04
+        for <xxx@xxx.xxx>
+        (version=TLS1_3 cipher=TLS_AES_256_GCM_SHA384 bits=256/256);
+        Tue, 16 Sep 2025 03:52:05 -0700 (PDT)
+Received-SPF: pass (google.com: domain of valeria.kliutko@ventionteams.com designates 2a01:111:f403:200a::620 as permitted sender) client-ip=2a01:111:f403:200a::620;
+Authentication-Results: mx.google.com;
+       dkim=pass header.i=@ventionteams.com header.s=selector2 header.b=mxoeCQsY;
+       arc=pass (i=1 spf=pass spfdomain=ventionteams.com dkim=pass dkdomain=ventionteams.com dmarc=pass fromdomain=ventionteams.com);
+       spf=pass (google.com: domain of valeria.kliutko@ventionteams.com designates 2a01:111:f403:200a::620 as permitted sender) smtp.mailfrom=Valeria.Kliutko@ventionteams.com;
+       dmarc=pass (p=REJECT sp=REJECT dis=NONE) header.from=ventionteams.com
+ARC-Seal: i=1; a=rsa-sha256; s=arcselector10001; d=microsoft.com; cv=none;
+ b=X7a5aPY8m6iX/A2oa+SITJxUJOlAaOQdeql/IkNAUHpBR+Uah/5z3y4BKMOJQnQpHWF1JRphBXmvzMRQdsXcgQzaBSzOlc1OrPjuWOu4ZoN9RL+mtSb4KaffiNM4pfWIaxYZpka/gi0jWURZhYEKk5eLxxln31sSIsg32YKOpEnj3PJ+X+7lemrbq01gidYRUcoWg5KvNtXn01EsXnL3sGHQcugurMOaavGj+MBw0W2buXR/nLvNWGpK6Fwu99E3g/sYssq9VD+W75DQZSxGrW5VwX2JH7CIDHqes7CfMNaTnp7rzCymtL8mBRIJvbtovltSnUznHjBnXyhtO2SzVQ==
+ARC-Message-Signature: i=1; a=rsa-sha256; c=relaxed/relaxed; d=microsoft.com;
+ s=arcselector10001;
+ h=From:Date:Subject:Message-ID:Content-Type:MIME-Version:X-MS-Exchange-AntiSpam-MessageData-ChunkCount:X-MS-Exchange-AntiSpam-MessageData-0:X-MS-Exchange-AntiSpam-MessageData-1;
+ bh=aS7s0d9jXInoCMA2mS5ctgfHwQA9rHtKFh9fK2mDNcc=;
+ b=tzyIfiZuLyDdE55O3lwNVjYI9CVCZkAznU8xI7EPz/4zWF3VbXCnZtXfrLQb92BKVOg+VyvKTUFx4tumGvzV8YEiLxuuzurzOJmgi3bpxU01MG7iSD0Mk6NwoGrHeQ/F6/Ks9JZ+Bp2f7XOhnpr2q+Q/emlKU3UHnGzqxRJECV9qfF6z62/ZX3qlolvFsrOZ7v9GxoN5OQ4HQYDSC+Uj5TwqN6n067dB/9fYX+IPKfQYD2swnaTk/oZpIgHdNKdDyVOBZJ1qQBBps0UHVt9FMjxUmFWwx7YXcq613Wq14fTQLqrtLx/rIEk9yYzOxmKy1Vsa8thalVVarXlwO9mK4g==
+ARC-Authentication-Results: i=1; mx.microsoft.com 1; spf=pass
+ smtp.mailfrom=ventionteams.com; dmarc=pass action=none
+ header.from=ventionteams.com; dkim=pass header.d=ventionteams.com; arc=none
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=ventionteams.com;
+ s=selector2;
+ h=From:Date:Subject:Message-ID:Content-Type:MIME-Version:X-MS-Exchange-SenderADCheck;
+ bh=aS7s0d9jXInoCMA2mS5ctgfHwQA9rHtKFh9fK2mDNcc=;
+ b=mxoeCQsYgAA977OcuxigODXBakvnlxwz78SryWqQlDj8+GzXJJayJDMvSXpbSCwrNktxEdr/42xUcFuJxOVZ+VVtajlpsYCB2CRMI1RMRd7JGJmZBvR0e7KtcmPWISxGTyoxFguXvlZm7IP3IUE8H5PGnzq6KDoqwekwf4FKGisl7/doN5NrmLLzUSk7y2lLTObDXjrCyGt/CDleSiD0APKHcKb2Adpu7ghJNT741s8+vUHsaM/FRG061KNkSBBoieeudMW5qf0mEm1LCEKe7bN0D8z2qlr6/uJjBBaZav+e+hsaRlqBPZzW9kfza91Cke6b9coi4+8RQitWFN4ldQ==
+Received: from PH0PR20MB6064.namprd20.prod.outlook.com (2603:10b6:510:2a1::8)
+ by DS7PR20MB6786.namprd20.prod.outlook.com (2603:10b6:8:e8::21) with
+ Microsoft SMTP Server (version=TLS1_2,
+ cipher=TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384) id 15.20.9115.22; Tue, 16 Sep
+ 2025 10:52:01 +0000
+Received: from PH0PR20MB6064.namprd20.prod.outlook.com
+ ([fe80::242c:2518:674e:e80a]) by PH0PR20MB6064.namprd20.prod.outlook.com
+ ([fe80::242c:2518:674e:e80a%4]) with mapi id 15.20.9115.020; Tue, 16 Sep 2025
+ 10:52:01 +0000
+From: Valeria Kliutko <Valeria.Kliutko@ventionteams.com>
+To: "xxx@xxx.xxx" <xxx@xxx.xxx>
+Subject: DEMO SUBJECT
+Thread-Topic: Vention's CTO TechTisch in Berlin
+Thread-Index: AQHcJvfuhsM24VRlQUS27zm6g4irPw==
+Date: Tue, 16 Sep 2025 10:52:01 +0000
+Message-ID: <wPwxiFmhZeX4f6jXm@lemlist.microsoft.com>
+Accept-Language: en-US
+Content-Language: en-US
+X-MS-Has-Attach:
+X-MS-TNEF-Correlator:
+authentication-results: dkim=none (message not signed)
+ header.d=none;dmarc=none action=none header.from=ventionteams.com;
+x-ms-publictraffictype: Email
+x-ms-traffictypediagnostic: PH0PR20MB6064:EE_|DS7PR20MB6786:EE_
+x-ms-office365-filtering-correlation-id: bf9c24ec-e1db-4845-697a-08ddf50f1101
+x-ms-exchange-senderadcheck: 1
+x-ms-exchange-antispam-relay: 0
+x-microsoft-antispam:
+ BCL:0;ARA:13230040|69100299015|366016|1800799024|4022899009|376014|8096899003|38070700021;
+x-microsoft-antispam-message-info:
+ =?Windows-1252?Q?II9wioqJoipBlHOY+OHiOWliJAp5HsTi9ZGBET6sZm3WhTYtExqp98GH?=
+ =?Windows-1252?Q?KmHJ/Dz7ymnZgYwPbfzErsCyeBmBMw7MgwHNgrTEd8BdSllE7KRkVKlV?=
+ =?Windows-1252?Q?5U9BSfxFPJIajjnVUwi3kXBhuCHxiDwyR69zTzbNGu3ZA3nIckrVKQSf?=
+ =?Windows-1252?Q?Ltr0QGyswy8MTEZhpA/KQT26z/QQGcdZBDLKQ1PlOFp3s6Hb39okpiJG?=
+ =?Windows-1252?Q?KYKwcskebf/D9lea8YZ5HJCpryAh1atfs0TSRCmzCu/hRZ4NtVfZQK5r?=
+ =?Windows-1252?Q?cMQlyDtoS9QjwYcZFxjIDVH5vFB1kJQmWgfw7N1drwPSZ2Z87332GauN?=
+ =?Windows-1252?Q?nEl3a0o2w/w9GtUMZ7bLxn4i+1+adTztDs1oUS3oaztTzlW88/wUtMtY?=
+ =?Windows-1252?Q?yQ3Gf0REY5f/rX9kIXoV2FBcHMFJ7Hz1K477FCtFCy4s3v3Ial2FjtoP?=
+ =?Windows-1252?Q?jConfztmWWHIYkuc45A+MSbeptMGSnbS0X7mHAr7VoyB17VPYz8JreVe?=
+ =?Windows-1252?Q?p7iWKJc0CYwyy95sIWhTEhe65hb8XgcqFWGGQ2On/aDKpcockffrEhhx?=
+ =?Windows-1252?Q?ua0dySnJQ9Fq+Km3qcsB2RIThDDL4qwunq9cNf1DDz1UOQD/NuwX8ZKZ?=
+ =?Windows-1252?Q?O/T2GdU3j5MxSCd/RL6t/orrP7YmCbIo+Lhz2s+0xLcUAeYcCetdnz7z?=
+ =?Windows-1252?Q?xiNNkB9doHY68bvaLfRt0HVh+j5AKgVNpEizahgaIRsi4Dxeqg+PiPHQ?=
+ =?Windows-1252?Q?qT/nzTSVI+Vf8j/VKwQqsn13R0fuM1MZkSj7ZoMnMuvz5xEq5cbdtFOj?=
+ =?Windows-1252?Q?rKroEP4Ysodrhm49iLxWKX7WDImGDtmWxOVRffshInr4ypO7YFO0cf3Z?=
+ =?Windows-1252?Q?Y/hEz59v3SykbRlFPGMj+xLZYU6bj6kd5AGd/5JVkIH8To9uGlMOrRly?=
+ =?Windows-1252?Q?JdXFwZU66KrZqFYMQ4OjCUZda1s/UHADt/twX8x+XYxdH8dtP21oYK97?=
+ =?Windows-1252?Q?/gPoZPooidPAvXFSfolmysGdgYTS/61XUmiknVxImDe/shRFoYc0GST8?=
+ =?Windows-1252?Q?jNJBDTTGVDX01QrwpjhS9uS2SW7Wn/yWd3cWr/1drG+mxf8g61cYYtcO?=
+ =?Windows-1252?Q?ksIU7+8ELC4WE/k7sz4PMOGceEJyRsolxnntWwdy4BYudx2uOVUrcko5?=
+ =?Windows-1252?Q?PxF3LMd7DJYVzetUJ/7aqf0RJl4WRPX4H/m8pg4xGNPv+HuDsAuhQK89?=
+ =?Windows-1252?Q?6LoM6WNFkj7ly4/XNFUKPMVJ6eUuh+MzDroJvqs0sMphp4Ri0SDA37tC?=
+ =?Windows-1252?Q?GmsXysPgEnE0MHk3HKc1U0LWoEi1IRBwRDgAGmv5GWGqXVXyF3ph5LhF?=
+ =?Windows-1252?Q?TZc1y0TrdbxsCMz3b8rTCunUN5JdIUPDd4vF5TLkKOb01z2Rb4wLanCd?=
+ =?Windows-1252?Q?dsxPds88IX6aS2ENoh5irV5S3786ebxHJqQBcarOpIXRAHoFIGlQYStA?=
+ =?Windows-1252?Q?gURYvdufliLdoFL7aC1qBD/nokgHL6MqXROOapx5TStlD2g8H6U=3D?=
+x-forefront-antispam-report:
+ CIP:255.255.255.255;CTRY:;LANG:en;SCL:1;SRV:;IPV:NLI;SFV:NSPM;H:PH0PR20MB6064.namprd20.prod.outlook.com;PTR:;CAT:NONE;SFS:(13230040)(69100299015)(366016)(1800799024)(4022899009)(376014)(8096899003)(38070700021);DIR:OUT;SFP:1101;
+x-ms-exchange-antispam-messagedata-chunkcount: 1
+x-ms-exchange-antispam-messagedata-0:
+ =?Windows-1252?Q?ooUlcUhYOo04+2zURN56WcOkmKslC777lcIqlp3fQ5LiR3tb+1A7/qke?=
+ =?Windows-1252?Q?77Gk6lqOmQ19mOtAODaZ1xm2jOleOLnl3pfxdw+PfgX72tKj6uIEFABm?=
+ =?Windows-1252?Q?VZ26MfKwpKZVZ0UpZr/preZBqGRi4keJVlUoqua3FPAv60akjKSFXRPw?=
+ =?Windows-1252?Q?Eb0fj66uc0fvEeS/S7VF3sAfp6DwWliPP7riCeQt3HIRYF+wdld4ckes?=
+ =?Windows-1252?Q?hz9TMHYC2o0qy1m8PDvOqn2ShFoMKN/kM4A5iNg2G/yEI1FVdWXbiUdK?=
+ =?Windows-1252?Q?gLI6pH/rdOwI/28Vq1ZohHCNjvai7Y8LJb4ve67Tvo2SFRcfTEXpAf/z?=
+ =?Windows-1252?Q?fsI2i74b4I11hNaVVCqK1/gYjJXc8sj2FPPkqqxZCRjMQ/+AQrgg8TNT?=
+ =?Windows-1252?Q?8dKpV1U6GVCnDY4vJhD3n05eeojAVNMrFsPPkIhA6NEIEfIWDMNFNFCk?=
+ =?Windows-1252?Q?Hs+PFQqF/yNkOGxzYPKn0L5s+RjWvZPnr2rtP6FpY3a71p/dsdhwc+HI?=
+ =?Windows-1252?Q?KngPC2g8eqC8HwSuzrVf025yN7opsqtGuySX/0kcWePFljgYXBaT+gdK?=
+ =?Windows-1252?Q?2J07TLhudOJtCQH69kujq4GKA9lzbrWp4Bh9oJrdZRHG+7YWKGF3bi5c?=
+ =?Windows-1252?Q?IrKnUgB6nV+va47IW6Y8KY85n1Eu/2n2cRAKJ+ojWTSfm0uFDu1DH/L1?=
+ =?Windows-1252?Q?PjnqavYUvTZdqmL0J59H7ZMNGhNkmAdrcQMikSaIs66gfaNWt8UCa3Ew?=
+ =?Windows-1252?Q?rTsOaByZLGo4FhkxROL5iUsbDKt2q7jCUYgjp3Nckr5Vb6bWffJQC1Vp?=
+ =?Windows-1252?Q?LAcYyLReDoSIadk3l1ZDHxpDqp+XTULhUsPT/deYcc2q/hyLEoHCeQ8m?=
+ =?Windows-1252?Q?KCEZ4KqcFD/759weUZI6IcjxHEBwDQTKCOMtNn/2b0eCql24nabnCQMb?=
+ =?Windows-1252?Q?18NOiAiPQMCvdnj6Xy0u2NAFndaMSxkkasU3op5r7tEb62VrtMNJq7+f?=
+ =?Windows-1252?Q?w4arg1/UbV+qibcCxbA4mF0JUntCZMICsFFK8sVEGtwrWzgiMIK9B07m?=
+ =?Windows-1252?Q?YlVS4MzJSYPJIqN+q031QzE5WZTKq4333uRGlmesbOQjdbWOk3i8/qCL?=
+ =?Windows-1252?Q?Sa0QndZxRDhXc6UJ4SSu6v+v538ACtVgz/pdK9TFA7NjVdQLkP7j2Lm0?=
+ =?Windows-1252?Q?zfFE5RwF9YBSAO/TSoxVOIDpKgNkSLQGaTNKr/1uj1DF8bnTvqKJrhd4?=
+ =?Windows-1252?Q?Pd5tXTT1kPwkVMPdRw2xOSxtayXZOIW3FcOP1gTU2V1FO6byIZ5gksn5?=
+ =?Windows-1252?Q?8n3ydtI4RQGkcDSktqOI9F4LenxG3H5e9Iyhkjk83BXzGX+LnJSbkdHF?=
+ =?Windows-1252?Q?k0aSPbv5KlnApV3VXS6ozm6Kk/hPjy/1PdX9Ccq7EAdoQykDc74jtyek?=
+ =?Windows-1252?Q?gycLmuVsaEaJt4z3cIg2dT7HnyDO7cpBXod8A2U85L9PAu9kTTR2hzk3?=
+ =?Windows-1252?Q?CxDIgBzSzFk9r2C2BfrmPcs2lwVb0BThFhlkorta7BREn8Kd6Yny74Ks?=
+ =?Windows-1252?Q?TpEUguo+el08AEDmsNeph49qpce7rWbUVFM6Y9pdu6QxwxS6KS8TEL+i?=
+ =?Windows-1252?Q?LyJir6Xcn/IIUzI9WPCJsZVZc7O55OlPEqxmhwV7PqzNXgcShZXpIyEc?=
+ =?Windows-1252?Q?nK6GM64taBLtUdvswT978kLL1LIMtKN2K9aWjd4ICsR/MWjVnDehGg?=
+ =?Windows-1252?Q?=3D=3D?=
+Content-Type: multipart/alternative;
+	boundary="_000_wPwxiFmhZeX4f6jXmlemlistmicrosoftcom_"
+MIME-Version: 1.0
+X-OriginatorOrg: ventionteams.com
+X-MS-Exchange-CrossTenant-AuthAs: Internal
+X-MS-Exchange-CrossTenant-AuthSource: PH0PR20MB6064.namprd20.prod.outlook.com
+X-MS-Exchange-CrossTenant-Network-Message-Id: bf9c24ec-e1db-4845-697a-08ddf50f1101
+X-MS-Exchange-CrossTenant-originalarrivaltime: 16 Sep 2025 10:52:01.4719
+ (UTC)
+X-MS-Exchange-CrossTenant-fromentityheader: Hosted
+X-MS-Exchange-CrossTenant-id: c96b7e1d-2cbb-4d73-9063-e3ce2cd97de5
+X-MS-Exchange-CrossTenant-mailboxtype: HOSTED
+X-MS-Exchange-CrossTenant-userprincipalname: LFYCjpD2GWgKN1iiWmgv95a6anBwAA+ETIX5MlTGF9Fdqqh3cb6cmUhsByoElmNaO1kHL2fMSyts8KOrG8lEMu7bq2Ns0pxfU5Ec/fQMNzqtR+qCuYC2kB/qO/6UBOvu
+X-MS-Exchange-Transport-CrossTenantHeadersStamped: DS7PR20MB6786
+
+DEMO BODY

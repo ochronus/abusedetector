@@ -1,0 +1,64 @@
+Delivered-To: xxx@xxx.xxx
+Received: by 2002:a05:6020:73c8:b0:66a:7b29:2f00 with SMTP id g8csp276499wdq;
+        Tue, 16 Sep 2025 04:47:35 -0700 (PDT)
+X-Google-Smtp-Source: AGHT+IEoNZJk3htMRzcbQ73Ad2LgN2S+QkfBkINAO3A2EsthZGNjuwO8N9tyUsAcT3ggG8ZR2NPJ
+X-Received: by 2002:a05:600c:138a:b0:456:19eb:2e09 with SMTP id 5b1f17b1804b1-45f211e575dmr175775695e9.8.1758023254897;
+        Tue, 16 Sep 2025 04:47:34 -0700 (PDT)
+ARC-Seal: i=1; a=rsa-sha256; t=1758023254; cv=none;
+        d=google.com; s=arc-20240605;
+        b=KyHw0+Rxr14qpX+M1KSajQRjPdZB+cBNBJaNfCC+SMjS219OlJJdsbiWlZdH5TzE5f
+         f0Jrn211QRE/c51WfsouPl6brRtd4UuMMIiPSY/M8c2NSg0cM7uFFCn0q67DPmwAYg4j
+         ojN6LuWKdnyzCv1UWp6F72vvxRdzaZKocpiNn+C3ROdWlfeP24jw88L63YtLkrffWHrZ
+         uTxZoUfV7jqpRXIH+RNlpM0P9sunWn/iQUoEnpmYlqjU4R5MJWcQsv6AQjQrzs06tGkK
+         F6zzg1iadxowJN2MBDF5WlOfyyK7j7sheM9UBay/L2gIvHqIFfMCLM8M30gb2wYzSFoX
+         f7tw==
+ARC-Message-Signature: i=1; a=rsa-sha256; c=relaxed/relaxed; d=google.com; s=arc-20240605;
+        h=mime-version:date:content-transfer-encoding:subject:to:from
+         :list-unsubscribe-post:list-unsubscribe:message-id:dkim-signature;
+        bh=rGmqCJ1EpSa20jKhoJ6tkzR+TV0RNIE1K7E83fe8Ylk=;
+        fh=giaKbal7ncBm9N4QGr0q0O0o+2JETSugzh8TjSBaedI=;
+        b=dFeF2tQM/dpciu6MRL+e0jy24ek2n1rMVFQhqMruaQV4kk5aayyp1EO4uVNwe+zpim
+         jx/IskJSV5e2NuoKJh3MRXE0kH1nC+ErVrQ0O9Pun1UvT3ie0r8oXWhAP33yNNRcKzSS
+         y6rEboRmLUirRoBsth6VamLkidX6X9iTpCmOAdmu2NxjIEDIZY7GZQ+TfmgWCFt/xTNh
+         IDKdo1yx47+OzucHi0K8WXCiris3RwbTDewEF1hUVn+s96erYYXv14H0e5tU+3vdFQUe
+         SlidlRrIYM3NVGF12SrWijU3JA2jEIJ7MH8CEYWub4mDPBXKwIYune474mBtN4vG5D36
+         yhzQ==;
+        dara=google.com
+ARC-Authentication-Results: i=1; mx.google.com;
+       dkim=pass header.i=@check-maintask.com header.s=dkim header.b=lzB3Trqf;
+       spf=pass (google.com: domain of jan.s@check-maintask.com designates 91.245.226.168 as permitted sender) smtp.mailfrom=jan.s@check-maintask.com
+Return-Path: <jan.s@check-maintask.com>
+Received: from mail.scaleurbias.com (mail.scaleurbias.com. [91.245.226.168])
+        by mx.google.com with ESMTPS id ffacd0b85a97d-3e760913fa9si10592849f8f.734.2025.09.16.04.47.34
+        for <xxx@xxx.xxx>
+        (version=TLS1_3 cipher=TLS_AES_256_GCM_SHA384 bits=256/256);
+        Tue, 16 Sep 2025 04:47:34 -0700 (PDT)
+Received-SPF: pass (google.com: domain of jan.s@check-maintask.com designates 91.245.226.168 as permitted sender) client-ip=91.245.226.168;
+Authentication-Results: mx.google.com;
+       dkim=pass header.i=@check-maintask.com header.s=dkim header.b=lzB3Trqf;
+       spf=pass (google.com: domain of jan.s@check-maintask.com designates 91.245.226.168 as permitted sender) smtp.mailfrom=jan.s@check-maintask.com
+Received: from [127.0.0.1] (localhost [127.0.0.1]) by localhost (Mailerdaemon) with ESMTPSA id 5FD0C2B5CE6
+	for <xxx@xxx.xxx>; Tue, 16 Sep 2025 11:47:30 +0000 (UTC)
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=check-maintask.com;
+	s=dkim; t=1758023252; h=from:subject:date:message-id:to:mime-version:content-type:
+	 content-transfer-encoding:list-unsubscribe:list-unsubscribe-post;
+	bh=rGmqCJ1EpSa20jKhoJ6tkzR+TV0RNIE1K7E83fe8Ylk=;
+	b=lzB3Trqf4gZgONRigy/7uYMDauv+hhyJvK/qX5I1h+kukMhPF8RjQgbh/HuKZVKJ9aqORU
+	idjPYO0+y6WB6O7L+A/zH8isFVykucwmozreBgGboxudZ4dLIBFFEaBBmk/yg6vOqf6WkX
+	rG8hhIDjdxrh1OUqsGP9R3qa3lyOvRbM3OzHB2xuDDYXCjEYUdge74mRictlX3hwDDNqLX
+	qpvKJ/tlg0JK06LsKg6lCaiJCsb/MaqBc5WSC3N+0LnbYqfx/1qeq684ZxZlcwIdpvmtiQ
+	KtbUwNJ3nzzbbI5XDO5Hvr1ws00yH+rj6S1vpdjSm7vfN8e785zOUReVNUDQvQ==
+Message-ID: <01995259-ea61-777c-8728-27cb70878bba@check-maintask.com>
+List-Unsubscribe:
+ <https://inst.check-maintask.com/unsub/1/bc91626c-6bc3-4bb0-8d6c-5adbc05f1c96>
+List-Unsubscribe-Post: List-Unsubscribe=One-Click
+From: Jan at Maintask <jan.s@check-maintask.com>
+To: xxx@xxx.xxx
+Subject: DEMO SUBJECT
+Content-Transfer-Encoding: quoted-printable
+Date: Tue, 16 Sep 2025 11:47:28 +0000
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+X-Last-TLS-Session-Version: TLSv1.3
+
+DEMO BODY
