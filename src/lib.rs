@@ -33,6 +33,7 @@ pub mod emails;
 pub mod eml;
 pub mod errors;
 pub mod escalation;
+pub mod facade;
 pub mod netutil;
 pub mod output;
 pub mod retry;
@@ -44,6 +45,9 @@ pub mod whois;
 pub use emails::{EmailSet, FinalizeOptions};
 pub use errors::{AbuseDetectorError, Result};
 pub use escalation::{EscalationContactType, EscalationPath};
+pub use facade::{
+    AbuseAnalysis, AbuseDetector, AbuseEmailContact, AnalysisOptions, AnalysisStats, IpSource,
+};
 pub use netutil::{is_private, is_reserved};
 pub use output::{AbuseContact, AbuseResults, ContactSource, OutputFormat};
 pub use styled_output::StyledFormatter;
