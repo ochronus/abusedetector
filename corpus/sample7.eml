@@ -1,0 +1,319 @@
+Return-Path: <bounce+4d3403.1f5bcd-mailgun=xxx@xxx.xxx>
+Received: from phl-compute-03.internal (phl-compute-03.internal [10.202.2.43])
+	 by slotpi04m34 (Cyrus 3.13.0-alpha0-1223-gceee3026b-fm-20250908.001-gceee3026) with LMTPA;
+	 Mon, 15 Sep 2025 14:12:55 -0400
+X-Cyrus-Session-Id: slotpi04m34-1757959975-363116-2-15068942280841000663
+X-Sieve: CMU Sieve 3.0
+X-Spam-known-sender: no
+X-Spam-sender-reputation: 0 (email)
+X-Spam-score: 6.0
+X-Spam-hits: BAYES_50 0.8, HEADER_FROM_DIFFERENT_DOMAINS 0.001, ME_SC_NH -0.001,
+  ME_SENDERREP_DENY 4, NEW_PRODUCTS 1.249, RCVD_IN_DNSWL_NONE -0.0001,
+  SPF_HELO_NONE 0.001, T_SPF_PERMERROR 0.01, LANGUAGES en, BAYES_USED user,
+  SA_VERSION 4.0.1
+X-Spam-source: IP='204.220.184.46', Host='k46.kb8c70eb.use4.send.mailgun.net',
+  Country='US', FromHeader='com', MailFrom='io'
+X-Spam-charsets: plain='utf-8'
+X-Resolved-to: xxx@xxx.xxx
+X-Delivered-to: xxx@xxx.xxx
+X-Original-Delivered-to: xxx@xxx.xxx
+X-Mail-from: bounce+4d3403.1f5bcd-mailgun=xxx@xxx.xxx
+Received: from phl-mx-05 ([10.202.2.204])
+  by phl-compute-03.internal (LMTPProxy); Mon, 15 Sep 2025 14:12:55 -0400
+Received: from phl-mx-05.messagingengine.com (localhost [127.0.0.1])
+	by mailmx.phl.internal (Postfix) with ESMTP id 917FD5D20107
+	for <xxx@xxx.xxx>; Mon, 15 Sep 2025 14:12:54 -0400 (EDT)
+Received: from mailmx.phl.internal (localhost [127.0.0.1])
+    by phl-mx-05.messagingengine.com (Authentication Milter) with ESMTP
+    id D98E2C1A735.44A8F5D200FF;
+    Mon, 15 Sep 2025 14:12:54 -0400
+ARC-Seal: i=2; a=rsa-sha256; cv=pass; d=messagingengine.com; s=fm1; t=
+    1757959974; b=dMDgQDL6Imne71fvQOWdqkcu6aHSGzZxhUIyjfmTuyROf+o/ry
+    7uylfdS2Fn9zR437M0GkusQl1SYmtA8eFpyqdJG2NSODnPBaS2c6EspQicsNjVAl
+    +4FNUOETqIPehWuLtJgZ0YkekhQJe/jNfkjlO7rRG++CtZjrukGutl85EHFMRhKu
+    lwL25/mQNjFyC9n+s95yLPLg4K04Ls4DA1ZB+2NH1fOlzpEHNusg+ckUh6OTU47K
+    kYPhS19QFLSO07FMSU00Rwm5U7q27x83StbTHfkgfpcpUhMPxpTfsqo4e1MxrdON
+    onlA0ES4w39Z9i5sCgOGDtMHiSFgQQix+Wqg==
+ARC-Message-Signature: i=2; a=rsa-sha256; c=relaxed/relaxed; d=
+    messagingengine.com; h=message-id:in-reply-to:references:from:to
+    :subject:content-transfer-encoding:date:mime-version
+    :content-type; s=fm1; t=1757959974; bh=I2Ay3XwQmEpR4zgtwXhmJI7VS
+    AgC51eQ5NpniLzhcac=; b=TmLtqloD6KlXRfaMyln3jgGJKQVneuAOuhCOs218d
+    LP5bBTUBTURSgvMXBQ3ggNlZNX51JoofIK+wgV7VPrDNz0a2wK/1YhayG3OCdhR3
+    dh/lI2uSOsLLHK+HUC7OXjXy7g3GlkEYAHhDuiB4EuCYZ6oK43rIv+gnr8EATaHr
+    0dA5/fJJWfSRMzvSuNVYdDPvmT8mPHCgL3AwTXkxX/xDgyCZhx5KX8OpLRJg7rsD
+    HI/ubYxOjRntGFp4UVjf9iA0dxoiWWN/YEK66Bo1Ql5DLQFqiihA8Er/WTR04b07
+    ZVGevirUQ8UZfKpoXoLvvb9TyPVeV4ZEY/YzRP8WQw4xQ==
+ARC-Authentication-Results: i=2; phl-mx-05.messagingengine.com;
+    x-csa=none;
+    x-me-sender=none;
+    x-ptr=pass smtp.helo=k46.kb8c70eb.use4.send.mailgun.net
+    policy.ptr=k46.kb8c70eb.use4.send.mailgun.net;
+    bimi=none (No BIMI records found);
+    arc=pass (as.1.mailgun.org=pass, ams.1.mailgun.org=pass)
+    smtp.remote-ip=204.220.184.46;
+    dkim=pass (1024-bit rsa key sha256) header.d=teamhealth.io
+    header.i=@teamhealth.io header.b=YkCQHGka header.a=rsa-sha256
+    header.s=mx;
+    dkim=pass (2048-bit rsa key sha256) header.d=getwillowfunds.com
+    header.i=@getwillowfunds.com header.b=P+ZQ8/Sd header.a=rsa-sha256
+    header.s=google;
+    dmarc=pass policy.published-domain-policy=reject
+    policy.published-subdomain-policy=reject
+    policy.applied-disposition=none policy.evaluated-disposition=none
+    (p=reject,sp=reject,d=none,d.eval=none) policy.policy-from=p
+    header.from=getwillowfunds.com;
+    iprev=pass smtp.remote-ip=204.220.184.46
+    (k46.kb8c70eb.use4.send.mailgun.net);
+    spf=permerror
+    smtp.mailfrom=
+    "bounce+4d3403.1f5bcd-mailgun=xxx@xxx.xxx"
+    smtp.helo=k46.kb8c70eb.use4.send.mailgun.net
+X-ME-Authentication-Results: phl-mx-05.messagingengine.com;
+    x-tls=pass smtp.version=TLSv1.2 smtp.cipher=ECDHE-RSA-AES256-GCM-SHA384
+      smtp.bits=256/256;
+    x-vs=clean score=0 state=0
+Authentication-Results: phl-mx-05.messagingengine.com;
+    x-csa=none;
+    x-me-sender=none;
+    x-ptr=pass smtp.helo=k46.kb8c70eb.use4.send.mailgun.net
+      policy.ptr=k46.kb8c70eb.use4.send.mailgun.net
+Authentication-Results: phl-mx-05.messagingengine.com;
+    bimi=none (No BIMI records found)
+Authentication-Results: phl-mx-05.messagingengine.com;
+    arc=pass (as.1.mailgun.org=pass, ams.1.mailgun.org=pass)
+      smtp.remote-ip=204.220.184.46
+Authentication-Results: phl-mx-05.messagingengine.com;
+    dkim=pass (1024-bit rsa key sha256) header.d=teamhealth.io
+      header.i=@teamhealth.io header.b=YkCQHGka header.a=rsa-sha256
+      header.s=mx;
+    dkim=pass (2048-bit rsa key sha256) header.d=getwillowfunds.com
+      header.i=@getwillowfunds.com header.b=P+ZQ8/Sd header.a=rsa-sha256
+      header.s=google;
+    dmarc=pass policy.published-domain-policy=reject
+      policy.published-subdomain-policy=reject
+      policy.applied-disposition=none policy.evaluated-disposition=none
+      (p=reject,sp=reject,d=none,d.eval=none) policy.policy-from=p
+      header.from=getwillowfunds.com;
+    iprev=pass smtp.remote-ip=204.220.184.46
+      (k46.kb8c70eb.use4.send.mailgun.net);
+    spf=permerror
+      smtp.mailfrom=
+      "bounce+4d3403.1f5bcd-mailgun=xxx@xxx.xxx"
+      smtp.helo=k46.kb8c70eb.use4.send.mailgun.net
+X-ME-VSCause: gggruggvucftvghtrhhoucdtuddrgeeffedrtdeggdefkeefkecutefuodetggdotefrod
+    ftvfcurfhrohhfihhlvgemucfhrghsthforghilhdpuffrtefokffrpgfnqfghnecuuegr
+    ihhlohhuthemuceftddtnecunecujfgurhepkfgjfhfhvffugfffgggtsehtqhertddttd
+    ejnecuhfhrohhmpeevohhlthhonhcuucforghrshhhrghllhcuoegtohhlthhonhesghgv
+    thifihhllhhofihfuhhnughsrdgtohhmqeenucggtffrrghtthgvrhhnpeeuheffieevte
+    dvhfdthfduhfeigfefheefheetjeffheejgfduuedtlefhieeiteenucfkphepvddtgedr
+    vddvtddrudekgedrgeeipdehgedrkeejrdduledrgeegnecuvehluhhsthgvrhfuihiivg
+    eptdenucfrrghrrghmpehinhgvthepvddtgedrvddvtddrudekgedrgeeipdhhvghlohep
+    khegiedrkhgskegtjedtvggsrdhushgvgedrshgvnhgurdhmrghilhhguhhnrdhnvghtpd
+    hmrghilhhfrhhomhepoegsohhunhgtvgdogegufeegtdefrddufhehsggtugdqmhgrihhl
+    ghhunhepohgthhhrohhnuhhsrdgtohhmsehtvggrmhhhvggrlhhthhdrihhoqedpnhgspg
+    hrtghpthhtohepuddprhgtphhtthhopeeomhgrihhlghhunhesohgthhhrohhnuhhsrdgt
+    ohhmqe
+X-ME-VSScore: 0
+X-ME-VSCategory: clean
+X-ME-CSA: none
+X-ME-Received: <xmx:JlfIaLRucEvQeAjzh-XFZSpT9SAJ4_6cSL322cRU2qudaFqXIQbdOA>
+X-ME-Received: <xmx:JlfIaE4SZGUUav7Qzus9tYMLA4T6b-VUfFFb-spZS2iOdJoPxxLiRg>
+Received-SPF: permerror
+    (teamhealth.io: Redundant applicable 'v=spf1' sender policies found)
+    receiver=phl-mx-05.messagingengine.com;
+    identity=mailfrom;
+    envelope-from="bounce+4d3403.1f5bcd-mailgun=xxx@xxx.xxx";
+    helo=k46.kb8c70eb.use4.send.mailgun.net;
+    client-ip=204.220.184.46
+Received: from k46.kb8c70eb.use4.send.mailgun.net (k46.kb8c70eb.use4.send.mailgun.net [204.220.184.46])
+	(using TLSv1.2 with cipher ECDHE-RSA-AES256-GCM-SHA384 (256/256 bits))
+	(No client certificate requested)
+	by phl-mx-05.messagingengine.com (Postfix) with ESMTPS id 44A8F5D200FF
+	for <xxx@xxx.xxx>; Mon, 15 Sep 2025 14:12:54 -0400 (EDT)
+ARC-Seal: i=1; cv=none; a=rsa-sha256; d=mailgun.org; s=mg; t=1757959972;
+ b=DmAizydnalFvdfn1wGVh+v5C+IYQp72DpCJIj8s7z2ZntzAvbFEev6Qw7+8JeiB1Tyrei3RSAOeCVZq2qiryiMl0Qi6JYIv20XtyzroHJWyuZYSrQ1QRnDN2ZXgb2A+/w4SFrevGrEhkAk5QmIjKoKIU8lr8adf8CEluChYyWoQ=
+ARC-Message-Signature: i=1; a=rsa-sha256; c=relaxed/relaxed; d=mailgun.org; s=mg; t=1757959972;
+ h=Content-Type: MIME-Version: Date: Content-Transfer-Encoding: Subject: Subject: To: To: From: From: References: In-Reply-To: Message-ID: Sender: DKIM-Signature: DKIM-Signature;
+ bh=I2Ay3XwQmEpR4zgtwXhmJI7VSAgC51eQ5NpniLzhcac=;
+ b=C+NSwTzs1N51t705M+DtbFmJM5YYjntcrZ7UVPi4Q5Hows36LBwVmqhuXD4wzcBfUCmUml1nOAXn3fkfB1RRDHvQx23J9LHFAL2w26nBUDTEcNis32iktbC8ENi94y+fZsawxGlMzGLPLlmxwhMuj6QNPa3piJbVINC88d4+/5I=
+ARC-Authentication-Results: i=1; mailgun.org;
+ dkim=pass header.d=getwillowfunds.com header.s=google header.b=P+ZQ8/Sd;
+ spf=pass (domain getwillowfunds.com designates 209.85.222.173 as permitted sender) smtp.mailfrom="colton@getwillowfunds.com";
+ dmarc=pass (dkim=pass domain=getwillowfunds.com) header.from=getwillowfunds.com;
+ arc=none
+DKIM-Signature: a=rsa-sha256; v=1; c=relaxed/relaxed; d=teamhealth.io; q=dns/txt; s=mx; t=1757959972; x=1757967172;
+ h=Content-Type: MIME-Version: Date: Content-Transfer-Encoding: Subject: Subject: To: To: From: From: References: In-Reply-To: Message-ID: Sender;
+ bh=I2Ay3XwQmEpR4zgtwXhmJI7VSAgC51eQ5NpniLzhcac=;
+ b=YkCQHGkaHuJ/i+zD1JVf4NcAXbues0N4JpiN5ltkQPA8Lkbqa3pgmgTyQ3p+mcZ0wNoZwipU3yqQJQI92/uYhk+GZa4l1+5xZ7t+/Na/+SXJmfZPyU1Q83xVudPkduQAFyI3u4ZToPz4n1R2p8pDlIb5mk3VLekXGPVxhAbVj5w=
+Received: from mail-qk1-f173.google.com (mail-qk1-f173.google.com [209.85.222.173]) by
+ 44f7ce307cdd8c96105447845f35795c7002ab6dfb3892975edcf1e231d24f58 with SMTP id
+ 68c857247591c29f4e38c903 (version=TLS1.3, cipher=TLS_AES_128_GCM_SHA256);
+ Mon, 15 Sep 2025 18:12:52 GMT
+X-Mailgun-Sending-Ip: 204.220.184.46
+X-Mailgun-Incoming: Yes
+X-Envelope-From: colton@getwillowfunds.com
+Received: from mail-qk1-f173.google.com (mail-qk1-f173.google.com [209.85.222.173]) by
+ 44f7ce307cdd8c96105447845f35795c7002ab6dfb3892975edcf1e231d24f58 with SMTP id
+ <undefined> (version=TLS1.3, cipher=TLS_AES_128_GCM_SHA256); Mon, 15 Sep 2025
+ 18:12:52 GMT
+Received: by mail-qk1-f173.google.com with SMTP id af79cd13be357-81999b1e9ccso414219385a.3
+        for <xxx@xxx.xxx>; Mon, 15 Sep 2025 11:12:51 -0700 (PDT)
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=getwillowfunds.com; s=google; t=1757959971; x=1758564771; darn=teamhealth.io;
+        h=mime-version:date:content-transfer-encoding:subject:to:from
+         :references:in-reply-to:message-id:from:to:cc:subject:date
+         :message-id:reply-to;
+        bh=I2Ay3XwQmEpR4zgtwXhmJI7VSAgC51eQ5NpniLzhcac=;
+        b=P+ZQ8/SdUmRqUdovQGQl1rF+ASigrEz6ClCs4kthhJMPeROBF/b39x1hDul3iu8VKU
+         i6hTaaGOI9e6kb/hhonDFib9XUkgyA/HWhlvwZYXeFg+yNrt7cwNk4HRbZio8OOcKuVe
+         o28ls7HQpWpRsE9p/eH1ZZOSC5+MxVBF88AgBxB4A9MSHHcaq0SvuIC78ZXmEaA38KpV
+         6SE1Po+fajJ8s+H57iL437BuCazFxeQufsJsNT1B36Q2qi4jGJB+Yy2H/dAeuIsWKhr/
+         2Gvj9e5PPLoaiN3V5EKPgVI70wlgnTrCURY2TpHKC8lRwRsW1lx7Dlx2P5f+XFfRxHX8
+         DEvg==
+X-Google-DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=1e100.net; s=20230601; t=1757959971; x=1758564771;
+        h=mime-version:date:content-transfer-encoding:subject:to:from
+         :references:in-reply-to:message-id:x-gm-message-state:from:to:cc
+         :subject:date:message-id:reply-to;
+        bh=I2Ay3XwQmEpR4zgtwXhmJI7VSAgC51eQ5NpniLzhcac=;
+        b=GVwbKi9YlEzHMYZxeHZXJGS43KIQ/rW/qEqAtzZRh/obNtdWYEFPyR12FJ//xa4P1T
+         KiaW7QaVewoGdJIaltXoRCVtXjbXmUL4C8ecA4T7OalS1owwDQ1deRqrRl6nFJnbdpFO
+         DON5A/RoTGkbJA+SULe0gh4ZwSzjLyIyUzfCJaM+33bRqR+F+HBJjyC0TSIysuyd/1uY
+         a93WrtW1yvEyPBzXPTt7tMsrvZCGj1v7h5n9FamZPLLliOcitOKqxoddi3PdUWQuenw4
+         Bu7svvUQLz53Fe3psAAvYhYKDgPuST6Ar65sHxl7jM2wRWP1LiuMFWTcKgPLpZAStmFs
+         BjcA==
+X-Gm-Message-State: AOJu0Yx89wB+RNmooBCM3tDjLCnlHv7YSsr4CBXPEc9C8RDuDLEmC9r3
+	5hWuxf2VyG9SDAbMPLjo/fLEsfIfuWWTG5Nh41IZFZRJo9EPcftbkqg9zWpZ+2dEETnvTUqIMHo
+	v8nMG
+X-Gm-Gg: ASbGnctHjqFNrJZFWWTsZkv8zqo8ZObgPGciMlbk4sT9yQtce7FHvRY4+1JJmdDxFSf
+	ysRBYMRRaWa5QLA2RZVOjEC3n+D/ETbjqB1uPJkOgP6S+z8rbGb0jXCL5Z7YIIvc6tTJjK9vcSD
+	+B5yxVCK9mneFeDVTBSEKffBDunuayHcwSnGyBOMonSYOGECgz6bmlOOIDLPi6N/n6gkejkCJxu
+	hoPBmHLlTz8A4M4RWAJlWCHdS5qAI8Ro1Eb4JH3DJuFM94cvkbEbWX/dOEXvDehNrO3gKXaPw5V
+	x1ZV7jhgJzpQDok4A/vtP55WvVa8Nrhb+usyGWIRilqdRnEM0uURo0TX/9mfafVfzBhYEoIUIkW
+	P7esa0Q0EungqdzAkFAtnjQsqSoTGdDEeNaSWRDxYfy2rTPTy3+vGmKmFQXTDVKRBrShaBGphNL
+	CJJIIKKe5LFJnNrXJAM18m1gvDq4UVhMiBFYq+VilJGTmyHwTzsV3vog==
+X-Google-Smtp-Source: AGHT+IEzahCQTyJTnpm3c0scZuVko+ZFVJepH/N0L0+IASLr2h5d8ZHY83Nq/7NI8DMMm3kG7CBvfg==
+X-Received: by 2002:a05:620a:7007:b0:812:be4:670e with SMTP id af79cd13be357-823ff6d69b3mr1578345885a.43.1757959971000;
+        Mon, 15 Sep 2025 11:12:51 -0700 (PDT)
+Received: from 01994e94-5d4b-784f-a539-72a8ee199e72.local (ec2-54-87-19-44.compute-1.amazonaws.com. [54.87.19.44])
+        by smtp.gmail.com with ESMTPSA id af79cd13be357-820cd701bf7sm817090685a.34.2025.09.15.11.12.50
+        for <xxx@xxx.xxx>
+        (version=TLS1_3 cipher=TLS_AES_256_GCM_SHA384 bits=256/256);
+        Mon, 15 Sep 2025 11:12:50 -0700 (PDT)
+Message-ID: <01994e94-5d4b-784f-a539-72a8ee199e72@getwillowfunds.com>
+In-Reply-To: <01993a20-292c-7d11-bb8f-85d5d6a9ba13@getwillowfunds.com>
+References: <01993a20-292c-7d11-bb8f-85d5d6a9ba13@getwillowfunds.com>
+From: Colton  Marshall <colton@getwillowfunds.com>
+To: xxx@xxx.xxx
+Subject: Re: We like First Team Health
+Content-Transfer-Encoding: quoted-printable
+Date: Mon, 15 Sep 2025 18:12:50 +0000
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+Hey Jerome, =C2=A0
+
+If you want to take a look at a rough quote without =
+filling anything out, all I=E2=80=99d need is: =C2=A0
+
+- The last three months company statements (I have a link you can drop them=
+ into) =C2=A0
+- Your personal FICO =C2=A0
+
+Want me to put numbers together =
+for you? =C2=A0
+
+
+
+Thanks,
+Colton Marshall=C2=A0
+
+On Thu, September 11, =
+2025 6:53 PM, Colton  Marshall <colton@getwillowfunds.com>
+[colton@getwillowfunds.com]> wrote:
+
+> Good day Jerome,
+>=20
+> Our recent programs are ending on 9/30. Features include:
+>=20
+> - Working Capital up to 5 million
+> - 6 to 36 month options
+> - Rate reduction for prepayment and refinancing
+> - 24-hour closing
+>=20
+> The only paperwork required is a filled-out online app and a couple =
+statements.
+>=20
+> Would you be opposed to talking about options for First =
+Team Health?
+>=20
+>=20
+> Colton Marshall
+> Executive Advisor
+> Willow
+>=20
+> If I reached out at a bad time, simply tell me.
+> On Mon, September 8, =
+2025 7:52 PM, Colton  Marshall <colton@getwillowfunds.com>
+> [colton@getwillowfunds.com]> wrote:
+>=20
+> > Jerome,
+> >=20
+> > I have been seeing stronger offers for your sector due to the latest =
+economic shifts.
+> >=20
+> > If you're currently doing business with a =
+different lender, I=E2=80=99m confident our offer will be more attractive.
+> >=20
+> > Can you make use of additional working capital?
+> >=20
+> >=20
+> > Best regards,
+> > Colton Marshall
+> > On Fri, September 5, 2025 7:09 PM=
+, Colton  Marshall <colton@getwillowfunds.com>
+> > [colton@getwillowfunds.=
+com]> wrote:
+> >=20
+> > > Good day,
+> > >=20
+> > > This is a friendly nudge=
+ regarding a few of the new programs currently on the table:
+> > >=20
+> > > - 6 to 36 month business funding options
+> > > - Bonuses for both =
+early repayment and rolling over your balance with us
+> > > - Take out up to 4 other positions
+> > > - Qualification and wire in =
+same day
+> > >=20
+> > > Open to seeing options for First Team Health? I can=
+ send more info if you're interested.
+> > >=20
+> > > Warm regards
+> > > Colton Marshall
+> > > On Tue, September 2, 2025 5:50 PM, Colton  =
+Marshall <colton@getwillowfunds.com>
+> > > [colton@getwillowfunds.com]> =
+wrote:
+> > >=20
+> > > > Hello Jerome,
+> > > >=20
+> > > > Our company has =
+recently released new 10 to 36 month funding options with a 24-hour =
+turnaround, along with other incentives.
+> > > >=20
+> > > > The only paperwork required is a filled-out online application and =
+three months statements.
+> > > >=20
+> > > > Could you make us of additional=
+ funding for First Team Health this quarter?
+> > > >=20
+> > > >=20
+> > > > Colton Marshall
+> > > > Senior Specialist
+> > > > Willow
+> > > >=20
+> > > > If this isn=E2=80=99t useful, simply tell me.
+> > > >

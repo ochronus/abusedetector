@@ -1,0 +1,211 @@
+Return-Path: <bounce+4d3403.1f5bcd-mailgun=xxx@xxx.xxx>
+Received: from phl-compute-03.internal (phl-compute-03.internal [10.202.2.43])
+	 by slotpi04m34 (Cyrus 3.13.0-alpha0-1223-gceee3026b-fm-20250908.001-gceee3026) with LMTPA;
+	 Mon, 15 Sep 2025 11:23:52 -0400
+X-Cyrus-Session-Id: slotpi04m34-1757949832-3184309-2-7446116354262820533
+X-Sieve: CMU Sieve 3.0
+X-Spam-known-sender: no
+X-Spam-sender-reputation: 500 (none)
+X-Spam-score: 0.8
+X-Spam-hits: BAYES_50 0.8, HEADER_FROM_DIFFERENT_DOMAINS 0.001,
+  ME_SENDERREP_NEUTRAL 0.001, RCVD_IN_DNSWL_NONE -0.0001,
+  RCVD_IN_MSPIKE_H3 0.001, RCVD_IN_MSPIKE_WL 0.001, SPF_HELO_NONE 0.001,
+  T_SPF_PERMERROR 0.01, LANGUAGES en, BAYES_USED user, SA_VERSION 4.0.1
+X-Spam-source: IP='69.72.43.14', Host='m43-14.mailgun.net', Country='US',
+  FromHeader='com', MailFrom='io'
+X-Spam-charsets: plain='utf-8'
+X-Resolved-to: xxx@xxx.xxx
+X-Delivered-to: xxx@xxx.xxx
+X-Original-Delivered-to: xxx@xxx.xxx
+X-Mail-from: bounce+4d3403.1f5bcd-mailgun=xxx@xxx.xxx
+Received: from phl-mx-01 ([10.202.2.200])
+  by phl-compute-03.internal (LMTPProxy); Mon, 15 Sep 2025 11:23:52 -0400
+Received: from phl-mx-01.messagingengine.com (localhost [127.0.0.1])
+	by mailmx.phl.internal (Postfix) with ESMTP id 488AB112010B
+	for <xxx@xxx.xxx>; Mon, 15 Sep 2025 11:23:52 -0400 (EDT)
+Received: from mailmx.phl.internal (localhost [127.0.0.1])
+    by phl-mx-01.messagingengine.com (Authentication Milter) with ESMTP
+    id 6168CD67BFF.369AD11200DE;
+    Mon, 15 Sep 2025 11:23:52 -0400
+ARC-Seal: i=2; a=rsa-sha256; cv=pass; d=messagingengine.com; s=fm1; t=
+    1757949832; b=T5kCE3GvZBzngEJfW0/UNAKCL1qOzCE1/Tk/9cqEQ2IbaFMXpD
+    hOEN9jPytH45+VlVrNvOGyhmUlsjLMikXKcfiIWO1yMu7v8uulgXpDl4a65A/uYY
+    P4+BFxXYXjtww/fGJVLFtN3aqbg0SYmqu9cyR53lOJi6YpZKwCzkkbqr2M7L9VS1
+    R7VkrzDzNoz95UXGYGSORy0cPpS5hL1uLzb4c0tqhVVsAjjUzMn7bdjnh7x1Mfrs
+    fV+YK6qi0kKvD3mcfltLRbWrFmH5Vi57lUuTL39aZzKYg0qPU5Q5S9l15Cw07U4Y
+    K3OgZstwsCZRWDVeEvvk9EijcdUV4DImhJ3Q==
+ARC-Message-Signature: i=2; a=rsa-sha256; c=relaxed/relaxed; d=
+    messagingengine.com; h=message-id:from:subject
+    :content-transfer-encoding:date:mime-version:to:content-type; s=
+    fm1; t=1757949832; bh=rcvvoL1Oo9PFzyzAZUDiYmFR7gRwW2m/IrsQPofiGb
+    Y=; b=WDWjL3wzCMal0qnYM+hEjZs0N3StV1kvx5OmyxaIAvbZ6Z5/BhqTpN74Z5
+    j03MQI37PjM6ElOpgbrSMy5f8KVJdvQV1nYRMxRDGzeraHdWQK8baHMpIkqr7AHg
+    MQtlgca9/yEmtW6FeLOjdAW7JaZaQIZdNNeaLLGWKw9bvUjGlJVfN2PG2XdAA6BG
+    SWHb7i+pNOiM52ySmjE1+l1R5BBo1jg7I2dOO3pv3FpJs945qNctCTSoPtwUVk91
+    xPvOvRVVm/fB23vIJluIohaqO8oG+DC6UC8beyheClJsg/7Y8LvEyxdTtzHDVm/l
+    AMnWGiYu8CTvJYTYgQ2ILutyFoXQ==
+ARC-Authentication-Results: i=2; phl-mx-01.messagingengine.com;
+    x-csa=none;
+    x-me-sender=none;
+    x-ptr=pass smtp.helo=m43-14.mailgun.net policy.ptr=m43-14.mailgun.net;
+    bimi=skipped (DMARC Policy is not at enforcement);
+    arc=pass (as.1.mailgun.org=pass, ams.1.mailgun.org=pass)
+    smtp.remote-ip=69.72.43.14;
+    dkim=pass (1024-bit rsa key sha256) header.d=teamhealth.io
+    header.i=@teamhealth.io header.b=kTG+d/Li header.a=rsa-sha256
+    header.s=mx;
+    dkim=pass (2048-bit rsa key sha256) header.d=try.coram-now.com
+    header.i=@try.coram-now.com header.b=DpL/4Y+t header.a=rsa-sha256
+    header.s=s1;
+    dmarc=pass policy.published-domain-policy=quarantine
+    policy.applied-disposition=none policy.evaluated-disposition=none
+    (p=quarantine,d=none,d.eval=none) policy.policy-from=p
+    header.from=try.coram-now.com;
+    iprev=pass smtp.remote-ip=69.72.43.14 (m43-14.mailgun.net);
+    spf=permerror
+    smtp.mailfrom=
+    "bounce+4d3403.1f5bcd-mailgun=xxx@xxx.xxx"
+    smtp.helo=m43-14.mailgun.net
+X-ME-Authentication-Results: phl-mx-01.messagingengine.com;
+    x-tls=pass smtp.version=TLSv1.2 smtp.cipher=ECDHE-RSA-AES256-GCM-SHA384
+      smtp.bits=256/256;
+    x-vs=clean score=21 state=0
+Authentication-Results: phl-mx-01.messagingengine.com;
+    x-csa=none;
+    x-me-sender=none;
+    x-ptr=pass smtp.helo=m43-14.mailgun.net policy.ptr=m43-14.mailgun.net
+Authentication-Results: phl-mx-01.messagingengine.com;
+    bimi=skipped (DMARC Policy is not at enforcement)
+Authentication-Results: phl-mx-01.messagingengine.com;
+    arc=pass (as.1.mailgun.org=pass, ams.1.mailgun.org=pass)
+      smtp.remote-ip=69.72.43.14
+Authentication-Results: phl-mx-01.messagingengine.com;
+    dkim=pass (1024-bit rsa key sha256) header.d=teamhealth.io
+      header.i=@teamhealth.io header.b=kTG+d/Li header.a=rsa-sha256
+      header.s=mx;
+    dkim=pass (2048-bit rsa key sha256) header.d=try.coram-now.com
+      header.i=@try.coram-now.com header.b=DpL/4Y+t header.a=rsa-sha256
+      header.s=s1;
+    dmarc=pass policy.published-domain-policy=quarantine
+      policy.applied-disposition=none policy.evaluated-disposition=none
+      (p=quarantine,d=none,d.eval=none) policy.policy-from=p
+      header.from=try.coram-now.com;
+    iprev=pass smtp.remote-ip=69.72.43.14 (m43-14.mailgun.net);
+    spf=permerror
+      smtp.mailfrom=
+      "bounce+4d3403.1f5bcd-mailgun=xxx@xxx.xxx"
+      smtp.helo=m43-14.mailgun.net
+X-ME-VSCause: gggruggvucftvghtrhhoucdtuddrgeeffedrtdeggdefkedtgecutefuodetggdotefrod
+    ftvfcurfhrohhfihhlvgemucfhrghsthforghilhdpuffrtefokffrpgfnqfghnecuuegr
+    ihhlohhuthemuceftddtnecutfgtvhguucffrghtvgcurghnohhmrghlhiculddvuddmne
+    cujfgurhepkffhuffgffggvfgtsehtqhertddttdejnecuhfhrohhmpeflrghsohhnucfo
+    ihhllhgvrhcuoehjrghsohhnsehtrhihrdgtohhrrghmqdhnohifrdgtohhmqeenucggtf
+    frrghtthgvrhhnpedvieevheefkeeiuedvudegjeektefftefgieetlefgfeegleelueet
+    ieffieejveenucfkphepieelrdejvddrgeefrddugedpvddtkedruddujedrieefrddvtd
+    dvnecuvehluhhsthgvrhfuihiivgeptdenucfrrghrrghmpehinhgvthepieelrdejvddr
+    geefrddugedphhgvlhhopehmgeefqddugedrmhgrihhlghhunhdrnhgvthdpmhgrihhlfh
+    hrohhmpeeosghouhhntggvodegugefgedtfedrudhfhegstgguqdhmrghilhhguhhnpeho
+    tghhrhhonhhushdrtghomhesthgvrghmhhgvrghlthhhrdhioheqpdhnsggprhgtphhtth
+    hopedupdhrtghpthhtohepoehmrghilhhguhhnsehotghhrhhonhhushdrtghomheq
+X-ME-VSScore: 21
+X-ME-VSCategory: clean
+X-ME-CSA: none
+X-ME-Received: <xmx:hy_IaE7fhJS5Udq0hi4Foo-rgIdTI7CP3II3jjmgPQdXSwmD2-Fsng>
+X-ME-Received: <xmx:hy_IaNZ_EtV2ZmmYiSVcLp1GhZJEjAOyVw8ejx9wGTaD8iILPvuHOA>
+Received-SPF: permerror
+    (teamhealth.io: Redundant applicable 'v=spf1' sender policies found)
+    receiver=phl-mx-01.messagingengine.com;
+    identity=mailfrom;
+    envelope-from="bounce+4d3403.1f5bcd-mailgun=xxx@xxx.xxx";
+    helo=m43-14.mailgun.net;
+    client-ip=69.72.43.14
+Received: from m43-14.mailgun.net (m43-14.mailgun.net [69.72.43.14])
+	(using TLSv1.2 with cipher ECDHE-RSA-AES256-GCM-SHA384 (256/256 bits))
+	(No client certificate requested)
+	by phl-mx-01.messagingengine.com (Postfix) with ESMTPS id 369AD11200DE
+	for <xxx@xxx.xxx>; Mon, 15 Sep 2025 11:23:51 -0400 (EDT)
+ARC-Seal: i=1; cv=none; a=rsa-sha256; d=mailgun.org; s=mg; t=1757949831;
+ b=B7bOpLM7osPZJjhUH9QsybmIr2wyHAXQqNBpyzCgfXet38gVFuwL+V2n/dxpETzo1mMUwLc1yhnOBx+SVF2lomyMYQkOf5m8dP2qXOKzx+wi0JIgpSCBT743somA+t9yUCri6QVduLX6H2lxy+uyKeJN/GLNdeDWWNDqCtVzgNs=
+ARC-Message-Signature: i=1; a=rsa-sha256; c=relaxed/relaxed; d=mailgun.org; s=mg; t=1757949831;
+ h=Content-Type: To: To: MIME-Version: Date: Content-Transfer-Encoding: Subject: Subject: From: From: Message-ID: Sender: DKIM-Signature: DKIM-Signature;
+ bh=rcvvoL1Oo9PFzyzAZUDiYmFR7gRwW2m/IrsQPofiGbY=;
+ b=jBCi+SFlngRXWnNzww23VsBIsSTVgqhcHtJfB1ten9HxMOLGI1jA3DLuFHIRVwf7vl6houOsAUBotYr0xMjXij4i8WKSU67AUAKHRB0sl9xgJCnXDkTEyZQ0TDP04bDvojKLG8gamL5t8l1bZfCt3JvrB3pAYYHqX5uJhjnUPV0=
+ARC-Authentication-Results: i=1; mailgun.org;
+ dkim=pass header.d=try.coram-now.com header.s=s1 header.b=DpL/4Y+t;
+ spf=pass (domain em6738.try.coram-now.com designates 208.117.63.202 as permitted sender) smtp.mailfrom="bounces+54727600-c7f4-chesney=teamhealth.io@em6738.try.coram-now.com";
+ dmarc=pass (dkim=pass domain=try.coram-now.com) header.from=try.coram-now.com;
+ arc=none
+DKIM-Signature: a=rsa-sha256; v=1; c=relaxed/relaxed; d=teamhealth.io; q=dns/txt; s=mx; t=1757949831; x=1757957031;
+ h=Content-Type: To: To: MIME-Version: Date: Content-Transfer-Encoding: Subject: Subject: From: From: Message-ID: Sender;
+ bh=rcvvoL1Oo9PFzyzAZUDiYmFR7gRwW2m/IrsQPofiGbY=;
+ b=kTG+d/LiqU1LX9/6jNj5EOGR+3zGizfkoWJ0I83yfmaT0ZcrgxUtuK+P7+O+mG9yY5yKk3Ehod47DDqCW05I3/jOiZDVz45AxYXfB8wRJnL+k8mUmfPV4AZm54JNtOnEAqZjF9i0O9eTihQ89xeVJ8ELu0xoOe/GgIy/g67RJxs=
+Received: from dhtrpfcx.outbound-mail.sendgrid.net (dhtrpfcx.outbound-mail.sendgrid.net
+ [208.117.63.202]) by
+ e8f8c2899bce9dc7d947c7b1a083b0863321af635e71ffd280aa96d161c6961e with SMTP id
+ 68c82f8537c522764c5bdb7a (version=TLS1.3, cipher=TLS_AES_128_GCM_SHA256);
+ Mon, 15 Sep 2025 15:23:49 GMT
+X-Mailgun-Sending-Ip: 69.72.43.14
+X-Mailgun-Incoming: Yes
+X-Envelope-From: bounces+54727600-c7f4-chesney=teamhealth.io@em6738.try.coram-now.com
+Received: from dhtrpfcx.outbound-mail.sendgrid.net (dhtrpfcx.outbound-mail.sendgrid.net
+ [208.117.63.202]) by
+ e8f8c2899bce9dc7d947c7b1a083b0863321af635e71ffd280aa96d161c6961e with SMTP id
+ <undefined> (version=TLS1.3, cipher=TLS_AES_128_GCM_SHA256); Mon, 15 Sep 2025
+ 15:23:46 GMT
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=try.coram-now.com;
+	h=from:subject:content-transfer-encoding:date:mime-version:to:
+	content-type:cc:content-type:date:from:subject:to;
+	s=s1; bh=rcvvoL1Oo9PFzyzAZUDiYmFR7gRwW2m/IrsQPofiGbY=;
+	b=DpL/4Y+tjwhmHmncipbtWEct16yxOtvzPxQE8yEpeOOhJqDl7mUWIlukc5EQRFlaFtLM
+	g4b8M9bRhcRkqa0U6Exxu/r0r02n6FHpHLqClGwhlcAF5JW4Z4AVzaLT0HqllgD95Ch4ZW
+	JuLl1q/zSRjvHwG/1kNJdgCdJ5zERVg9aIea2f7Wevq1oSp3pECdt+Jjc3a710D5OJueee
+	ZKr/LL4KdxJaBfsYxqK3xjXQuzK6VANgKAB75uHanfV5L5ZbdcCOsOEqyuJADJ0eWA68Mm
+	UARhsUlrNWXuruRdeGCygmhGRGkW+kcN3vWfGLWkTIEEg28dQxz51EChU/xCgWgQ==
+Received: by recvd-769f975875-qs2lb with SMTP id recvd-769f975875-qs2lb-1-68C80843-6A
+	2025-09-15 12:36:19.93915383 +0000 UTC m=+1085551.741413396
+Received: from 01994d60-4823-7c17-a7a6-4edc950de32d.local (unknown)
+	by geopod-ismtpd-38 (SG) with ESMTP id TwSClm0ZTuWj1x9Bo2Ii4g
+	for <xxx@xxx.xxx>; Mon, 15 Sep 2025 12:36:19.831 +0000 (UTC)
+Message-ID: <01994d60-4823-7c17-a7a6-4edc950de32d@try.coram-now.com>
+From: Jason Miller <jason@try.coram-now.com>
+Subject: would love your feedback, Deborah
+Content-Transfer-Encoding: quoted-printable
+Date: Mon, 15 Sep 2025 12:36:19 +0000 (UTC)
+MIME-Version: 1.0
+X-SG-EID: 
+ =?us-ascii?Q?u001=2ECK6DdWMh3VXEyM1n24mMOkyzth7wzkCiPkiGiQqja61ZODKQejWniet6=2F?=
+ =?us-ascii?Q?TgK8pTbDl4KeL6k4ax2BOQ6Ii6vDn7UKP4Mt2lV?=
+ =?us-ascii?Q?J77pm6laaPzzjdBDpf1fufcPpjaM26FXtAiZ9iI?=
+ =?us-ascii?Q?09e=2FLyBVvFiOrCySSjIPjpu5h2441=2Fq=2Ftf1vX1W?=
+ =?us-ascii?Q?MsuDeVxlnv88806g93AzsqITLyJh2ns8mXMZtVe?=
+ =?us-ascii?Q?+VHaVnKZW=2FviWlKxP8Ar1XcbE2yso9jfPpMAUkk?= =?us-ascii?Q?EIdo?=
+To: xxx@xxx.xxx
+X-Entity-ID: u001.yhe5NoIcySSUtlc/PYb3mA==
+Content-Type: text/plain; charset=utf-8
+
+Hi Deborah,=C2=A0
+
+I=E2=80=99m reaching out on behalf of David Lu, our Head of Product here at=
+ Coram. He's developing a new product that unifies video and access control=
+. That means every door event automatically pairs with video, so you see ex=
+actly who=E2=80=99s coming and going.=C2=A0
+
+It all runs from one cloud dashboard without juggling multiple vendors or t=
+ools.
+
+Since our records show you help make security decisions at TeamHealth Inc, =
+I thought you=E2=80=99d have a unique perspective on whether we=E2=80=99re =
+tackling the problem the right way.
+
+I=E2=80=99d love to invite you to a short demo. It's not as a sales pitch, =
+but as a chance to show you what we=E2=80=99ve been building and get your c=
+andid feedback before we launch more broadly.
+
+Reply with a "yes" and I'll get you scheduled with him.
+
+Thanks,
+Jason Miller
+Coram
+
+Coram | 1231 Alderwood Ave, Sunnyvale CA | Reply with 'unsubscribe' to be r=
+emoved.

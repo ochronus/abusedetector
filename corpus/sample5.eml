@@ -1,0 +1,169 @@
+Return-Path: <avah@bellafique.com>
+Received: from phl-compute-03.internal (phl-compute-03.internal [10.202.2.43])
+	 by slotpi04m34 (Cyrus 3.13.0-alpha0-1223-gceee3026b-fm-20250908.001-gceee3026) with LMTPA;
+	 Tue, 16 Sep 2025 00:05:13 -0400
+X-Cyrus-Session-Id: slotpi04m34-1757995513-3856266-2-4492067944315663148
+X-Sieve: CMU Sieve 3.0
+X-Spam-known-sender: no
+X-Spam-sender-reputation: 500 (none)
+X-Spam-score: 53.0
+X-Spam-hits: BAYES_50 0.8, DCC_CHECK 1.1, FSL_BULK_SIG 0.001, HK_NAME_MR_MRS 0.001,
+  HTML_MESSAGE 0.001, ME_SC_NH -0.001, ME_SENDERREP_NEUTRAL 0.001,
+  ME_VADESPAM_MED 2.5, MIME_HTML_ONLY 0.1, RCVD_IN_BL_SPAMCOP_NET 2,
+  RCVD_IN_INVALUEMENT 2, RCVD_IN_INVALUEMENT24 2, RCVD_IN_MSPIKE_BL 0.001,
+  RCVD_IN_MSPIKE_L5 0.001, RCVD_IN_PSBL 2.7, RCVD_IN_SBL_CSS 3,
+  RCVD_IN_ZEN_LASTEXTERNAL 8, SH_BODYURI_REVERSE_CSS 3, SH_DBL_HEADERS 8,
+  SH_HELO_DBL 8, SPF_HELO_NONE 0.001, SPF_PASS -0.001, URIBL_BLACK 1.7,
+  URIBL_CSS_A 0.1, URIBL_DBL_MALWARE 8, LANGUAGES en, BAYES_USED user,
+  SA_VERSION 4.0.1
+X-Spam-source: IP='94.156.175.86', Host='ivory.bellafique.com', Country='BG',
+  FromHeader='com', MailFrom='com'
+X-Spam-charsets: 
+X-Resolved-to: xxx@xxx.xxx
+X-Delivered-to: xxx@xxx.xxx
+X-Mail-from: avah@bellafique.com
+Received: from phl-mx-01 ([10.202.2.200])
+  by phl-compute-03.internal (LMTPProxy); Tue, 16 Sep 2025 00:05:13 -0400
+Received: from phl-mx-01.messagingengine.com (localhost [127.0.0.1])
+	by mailmx.phl.internal (Postfix) with ESMTP id BE76E11200C3
+	for <hello@leadership.garden>; Tue, 16 Sep 2025 00:05:12 -0400 (EDT)
+Received: from mailmx.phl.internal (localhost [127.0.0.1])
+    by phl-mx-01.messagingengine.com (Authentication Milter) with ESMTP
+    id 0BCADAC5A33.53B6511200F4;
+    Tue, 16 Sep 2025 00:05:12 -0400
+ARC-Seal: i=1; a=rsa-sha256; cv=none; d=messagingengine.com; s=fm1; t=
+    1757995512; b=Yg29cfW/irDfHN1UBg/86FoQeZE/NRvDmslDGKx3J/O8jCAUbM
+    o/N+zifFlJSvYzoQEXeGkh0DzwpaBoRGi5x/hFLBzgmRpfNQG38WtrqUbCFAkLs3
+    79vHUzE4v/TTc8eN6km26nqUI2AgjhXcTrUD43CZf6gV3tl2H6e0ZPR7sZj6T1xo
+    lc12gyvnSUKoZWRtQsKenRq3wWzybeSvC/OAjOnC4i9ZEbCQlxJfxJUYiWWk9kqU
+    U+hhKmjwnPWw/UY8C4phYEHGLn2FXdWliQJDSeDAGe9x+dJe8E48pNSk5GfTyC24
+    4C4whUhuOgLeB85nXftityDbEq17Iazqo33g==
+ARC-Message-Signature: i=1; a=rsa-sha256; c=relaxed/relaxed; d=
+    messagingengine.com; h=reply-to:from:to:subject:date:message-id
+    :mime-version:content-type:content-transfer-encoding; s=fm1; t=
+    1757995512; bh=lDD+q5kJfCAX+d/YvyUZgqbdzNb6rJuU430WhAC2D0E=; b=b
+    R559eAKXRoCbf1RPWQZKmtaUMMtc93cgUCEiNpgwLDsd/vpS9VXFl1QyGsg6SV5r
+    1efiLnJzdvuPp34jretjK8ijW+zJ3gP+CRakKLdg3uHWq+k34z4MmJLXBa7wSVgV
+    k3OTcpKnN2OzvAE1YAnWGLqdvZ+LCDsSDDEuR2bW0IIzE2lDpO+Gnhlrl0jg/vW8
+    0ltaZhAXcUUIXKC0adViODrmOduCd7/Pb+TfJbLzSDO2NPU9XYIA7J+8DeqdaCtJ
+    ivSCJvdTLmGGoPmsqufwVMO0pqGvCCxmATwdmXZTkTCx05FdmfwZlf8tqyTzZ7mL
+    X6IWnitSKwHQVNeUcvJoA==
+ARC-Authentication-Results: i=1; phl-mx-01.messagingengine.com;
+    x-csa=none;
+    x-me-sender=none;
+    x-ptr=pass smtp.helo=ivory.bellafique.com
+    policy.ptr=ivory.bellafique.com;
+    bimi=skipped (Insufficient authentication, DKIM required);
+    arc=none (no signatures found);
+    dkim=invalid (unsupported algorithm rsa-sha1, 2048-bit rsa key sha1)
+    header.d=bellafique.com header.i=avah@bellafique.com header.b=BW2pXS43
+    header.a=rsa-sha1 header.s=dkim;
+    dmarc=pass policy.published-domain-policy=none
+    policy.applied-disposition=none policy.evaluated-disposition=none
+    (p=none,d=none,d.eval=none) policy.policy-from=p
+    header.from=bellafique.com;
+    iprev=pass smtp.remote-ip=94.156.175.86 (ivory.bellafique.com);
+    spf=pass smtp.mailfrom=avah@bellafique.com
+    smtp.helo=ivory.bellafique.com
+X-ME-Authentication-Results: phl-mx-01.messagingengine.com;
+    x-tls=pass smtp.version=TLSv1.2 smtp.cipher=ADH-AES256-GCM-SHA384
+      smtp.bits=256/256;
+    x-vs=spam:medium score=300 state=1
+Authentication-Results: phl-mx-01.messagingengine.com;
+    x-csa=none;
+    x-me-sender=none;
+    x-ptr=pass smtp.helo=ivory.bellafique.com
+      policy.ptr=ivory.bellafique.com
+Authentication-Results: phl-mx-01.messagingengine.com;
+    bimi=skipped (Insufficient authentication, DKIM required)
+Authentication-Results: phl-mx-01.messagingengine.com;
+    arc=none (no signatures found)
+Authentication-Results: phl-mx-01.messagingengine.com;
+    dkim=invalid (unsupported algorithm rsa-sha1, 2048-bit rsa key sha1)
+      header.d=bellafique.com header.i=avah@bellafique.com header.b=BW2pXS43
+      header.a=rsa-sha1 header.s=dkim;
+    dmarc=pass policy.published-domain-policy=none
+      policy.applied-disposition=none policy.evaluated-disposition=none
+      (p=none,d=none,d.eval=none) policy.policy-from=p
+      header.from=bellafique.com;
+    iprev=pass smtp.remote-ip=94.156.175.86 (ivory.bellafique.com);
+    spf=pass smtp.mailfrom=avah@bellafique.com
+      smtp.helo=ivory.bellafique.com
+X-ME-VSCause: gggruggvucftvghtrhhoucdtuddrgeeffedrtdeggdefleehiecutefuodetggdotefrod
+    ftvfcurfhrohhfihhlvgemucfhrghsthforghilhdpuffrtefokffrpgfnqfghnecuuegr
+    ihhlohhuthemuceftddtnecuogfuphgrmhffohhmrghinhculdeftddtmdenucfjughrpe
+    hrhffvufffkfggtgfgsehhqheftddttddtnecuhfhrohhmpeforhdrpfgrshhirheorghv
+    rghhsegsvghllhgrfhhiqhhuvgdrtghomheqnecuggftrfgrthhtvghrnhepgeejteejff
+    evheethfelfeeijeekvdekhfeffeelhfetgfelvdetgfffvdekieegnecukfhppeelgedr
+    udehiedrudejhedrkeeinecuufhprghmffhomhgrihhnpehfrghltghonhhsihhinhhvrd
+    gtohhmnecuvehluhhsthgvrhfuihiivgepvdelnecurfgrrhgrmhepihhnvghtpeelgedr
+    udehiedrudejhedrkeeipdhhvghlohepihhvohhrhidrsggvlhhlrghfihhquhgvrdgtoh
+    hmpdhmrghilhhfrhhomhepoegrvhgrhhessggvlhhlrghfihhquhgvrdgtohhmqedpnhgs
+    pghrtghpthhtohepuddprhgtphhtthhopeeohhgvlhhloheslhgvrgguvghrshhhihhprd
+    hgrghruggvnheq
+X-ME-VSScore: 300
+X-ME-VSCategory: spam:medium
+X-ME-CSA: none
+X-ME-Received: <xmx:-OHIaLvmmf3MR5DYxo3cals7yNOFbhLvWExUQEr_Uiqa33OSLL4dmA>
+X-ME-Received: <xmx:-OHIaD-XLtYrVSZBkyyDzjHwZLHLBbbh-IlJEtHLZKZb4hPK1oGX4A>
+Received-SPF: pass
+    (bellafique.com: 94.156.175.86 is authorized to use 'avah@bellafique.com' in 'mfrom' identity (mechanism 'mx' matched))
+    receiver=phl-mx-01.messagingengine.com;
+    identity=mailfrom;
+    envelope-from="avah@bellafique.com";
+    helo=ivory.bellafique.com;
+    client-ip=94.156.175.86
+Received: from ivory.bellafique.com (ivory.bellafique.com [94.156.175.86])
+	(using TLSv1.2 with cipher ADH-AES256-GCM-SHA384 (256/256 bits))
+	(No client certificate requested)
+	by phl-mx-01.messagingengine.com (Postfix) with ESMTPS id 53B6511200F4
+	for <hello@leadership.garden>; Tue, 16 Sep 2025 00:05:12 -0400 (EDT)
+DKIM-Signature: v=1; a=rsa-sha1; c=relaxed/relaxed; s=dkim; d=bellafique.com;
+ h=Reply-To:From:To:Subject:Date:Message-ID:MIME-Version:Content-Type:Content-Transfer-Encoding; i=avah@bellafique.com;
+ bh=rqFOz7GoKVY9PWjaaMBXKo8wyKg=;
+ b=BW2pXS43EVfkM0rqzqkJzI9NTjNrS0vxmOzYsMSTftp8UPmyQRIX/cUqLjlY9lCc+9zeYpTePD/L
+   IOOxi9nRDI+sBILk878WNL2vGhLIge9s1pAj5Q6+AkR4DvmKmo68ZwKfTyRHfAGBS+xvQRphrknZ
+   OMFVFk+7bosrTRFwwLp53uuBQFddAky9EGk3Fe/a3F+h+eY4EQUATLDjC8/wu7S+s6CrXuZHyhWV
+   xpE8/C8TEKdqmkKfpfVutSmhhaBUYuhouca8AH0M5n3F7Z+qTku5Vz6J77qzbKaryZmNi437SU4C
+   Aib/Wz4tkyKK/dpWJ9aVhCEvpzFQDq93UurCLg==
+DomainKey-Signature: a=rsa-sha1; c=nofws; q=dns; s=dkim; d=bellafique.com;
+ b=pqQ4dNdXBooOYCbMWLfeprTzYkIY4HgUY29GXGcL8SsO2zxwsc42SHMwT48fkgykZB2AfjJJUNA1
+   UnxNhCWWfwSszHxPeeuqQBJ5nFtlDsPL6vN55TlRMa9ihQhkNyDVlLhiG9MFD95UicoRorerU21t
+   CzTS7J55yyAAvfGkkLQ/GYSp/f6PLWtAYXUT6ziZJpqeXE2dgIOX2+nB3IEKxccNkrVgHVJhAcGW
+   7PdCl+jb5YarOcz6mapFG3AhzbSOhkGtpF43zVFZpLrD4oeNhvdUskvUXBw4Jd8TToPFkiRO0cCf
+   tk9K2RYUoPdagqPELi0FqJhAXqNNKIW/c++D4g==;
+Reply-To: mr.nasir@falconsiinv.com
+From: Mr.Nasir<avah@bellafique.com>
+To: xxx@xxx.xxx
+Subject: Project Funding
+Date: 15 Sep 2025 21:03:56 -0700
+Message-ID: <20250915210356.13C29D6B04C9D76D@bellafique.com>
+MIME-Version: 1.0
+Content-Type: text/html
+Content-Transfer-Encoding: quoted-printable
+
+<!DOCTYPE HTML>
+
+<html><head><title></title>
+<meta http-equiv=3D"X-UA-Compatible" content=3D"IE=3Dedge">
+</head>
+<body style=3D"margin: 0.4em;">
+<p>
+I hope this message finds you well. I wanted to inquire if you have any ong=
+oing or upcoming projects in need of funding. At Falcons Investment, we spe=
+cialize in sourcing capital for unique business development opportunities a=
+nd work closely with established companies globally to bring these opportun=
+ities to life. We are currently offering investment loans with a competitiv=
+e 2.5% annual interest rate, designed for long-term projects that can gener=
+ate up to 10% ROI over the investment period.<br>
+&nbsp;<br>If our financing terms align with your organization&#8217;s needs=
+, we would be delighted to explore potential collaboration. Regardless of p=
+roject type or location, we consider proposals from all sectors, provided t=
+hey meet our board's approval after review. If you're interested in moving =
+forward, please send us your business plan for a detailed evaluation.<br>&n=
+bsp;<br>Best wishes,&nbsp; <br>Mr.Nasir<br>Senior Consultant<br>Falcons Inv=
+estment
+</p>
+
+
+</body></html>

@@ -1,0 +1,320 @@
+Return-Path: <bounce+4d3403.1f5bcd-mailgun=xxx@xxx.xxx>
+Received: from phl-compute-03.internal (phl-compute-03.internal [10.202.2.43])
+	 by slotpi04m34 (Cyrus 3.13.0-alpha0-1223-gceee3026b-fm-20250908.001-gceee3026) with LMTPA;
+	 Mon, 15 Sep 2025 12:55:00 -0400
+X-Cyrus-Session-Id: slotpi04m34-1757955300-3989288-2-2234798063863939962
+X-Sieve: CMU Sieve 3.0
+X-Spam-known-sender: no
+X-Spam-sender-reputation: 0 (email)
+X-Spam-score: 4.8
+X-Spam-hits: BAYES_50 0.8, HEADER_FROM_DIFFERENT_DOMAINS 0.001, ME_SC_NH -0.001,
+  ME_SENDERREP_DENY 4, RCVD_IN_DNSWL_NONE -0.0001, SPF_HELO_NONE 0.001,
+  T_SPF_PERMERROR 0.01, LANGUAGES en, BAYES_USED user, SA_VERSION 4.0.1
+X-Spam-source: IP='204.220.184.46', Host='k46.kb8c70eb.use4.send.mailgun.net',
+  Country='US', FromHeader='com', MailFrom='io'
+X-Spam-charsets: plain='utf-8'
+X-Resolved-to: xxx@xxx.xxx
+X-Delivered-to: xxx@xxx.xxx
+X-Original-Delivered-to: xxx@xxx.xxx
+X-Mail-from: bounce+4d3403.1f5bcd-mailgun=xxx@xxx.xxx
+Received: from phl-mx-03 ([10.202.2.202])
+  by phl-compute-03.internal (LMTPProxy); Mon, 15 Sep 2025 12:55:00 -0400
+Received: from phl-mx-03.messagingengine.com (localhost [127.0.0.1])
+	by mailmx.phl.internal (Postfix) with ESMTP id E2B154BA3E80
+	for <xxx@xxx.xxx>; Mon, 15 Sep 2025 12:54:59 -0400 (EDT)
+Received: from mailmx.phl.internal (localhost [127.0.0.1])
+    by phl-mx-03.messagingengine.com (Authentication Milter) with ESMTP
+    id 9B256B659AC.93C6A4BA3EBB;
+    Mon, 15 Sep 2025 12:54:59 -0400
+ARC-Seal: i=2; a=rsa-sha256; cv=pass; d=messagingengine.com; s=fm1; t=
+    1757955299; b=HLNuhcPNtcuekue3o6j4gbdkA8V3i89xDBk+5luCc/X4ypdKCh
+    BHvhxs9QOIvmR2a/h69995By0HJx7W37lKNea55V2Nk6HaJ5VWmcj6/NPIitjap8
+    oUvTNQsxyEMngfOralNFeRmqqvau3v8NmzzdGZsMMQ8pv99t6+wv/ulkJSjCD65l
+    oXdJ4dyuWHqt7CpjXn2CuDBgdpD23/N6rmKuMiYTvTGBPuaClbHLDqimWevjsR/n
+    4Pq9pozdGPuDoG+SFFDTkKyJn3GlmuurnhM9iVupYOMXrMxIIhpH/aJe5YAF/+Dw
+    iyNd0zBUHI8jtVuQeW+YeeFAce+qr/eMjDWw==
+ARC-Message-Signature: i=2; a=rsa-sha256; c=relaxed/relaxed; d=
+    messagingengine.com; h=message-id:in-reply-to:references:from:to
+    :subject:content-transfer-encoding:date:mime-version
+    :content-type; s=fm1; t=1757955299; bh=iMJ+piFAsWawrCdErfEbO9GF1
+    U7q9JQ6KmcFYwz73F0=; b=P+jOeuAA3xfNLo3ge92O1mVHBk2vexFieWGMOJq7j
+    nQyFQmumRNahOdhd0SZfxPMoq9OhrQ4w9+SdGcIl6iBn9y393OzjtqdE2gq/uMw5
+    3fHNNnF27WDwnxWuLH6zRYHQhhdxoCevqtBWy76ufao0cthXkS1c6peD3o8It5/t
+    6sxoQj+E13KiXOFFXBnGMX6MSJ7ftayDCi44SgLFpw041IeN0hum153lUGdlfxRN
+    fOCCqU66rxhGhJ6CuUqx5pSrP9M3CHNbiSU9qzQaK7DCukIwtvWYCM0P5Z5mAUAa
+    JKPvbJBwdlT6czXKAmP2SOQrLshZaanSTfvW9J7h1Z6BQ==
+ARC-Authentication-Results: i=2; phl-mx-03.messagingengine.com;
+    x-csa=none;
+    x-me-sender=none;
+    x-ptr=pass smtp.helo=k46.kb8c70eb.use4.send.mailgun.net
+    policy.ptr=k46.kb8c70eb.use4.send.mailgun.net;
+    bimi=none (No BIMI records found);
+    arc=pass (as.1.mailgun.org=pass, ams.1.mailgun.org=pass)
+    smtp.remote-ip=204.220.184.46;
+    dkim=pass (1024-bit rsa key sha256) header.d=teamhealth.io
+    header.i=@teamhealth.io header.b=lXu6IIb3 header.a=rsa-sha256
+    header.s=mx;
+    dkim=pass (2048-bit rsa key sha256) header.d=willowventurecapitalnow.com
+    header.i=@willowventurecapitalnow.com header.b=iDhgbQPh
+    header.a=rsa-sha256 header.s=google;
+    dmarc=pass policy.published-domain-policy=reject
+    policy.published-subdomain-policy=reject
+    policy.applied-disposition=none policy.evaluated-disposition=none
+    (p=reject,sp=reject,d=none,d.eval=none) policy.policy-from=p
+    header.from=willowventurecapitalnow.com;
+    iprev=pass smtp.remote-ip=204.220.184.46
+    (k46.kb8c70eb.use4.send.mailgun.net);
+    spf=permerror
+    smtp.mailfrom=
+    "bounce+4d3403.1f5bcd-mailgun=xxx@xxx.xxx"
+    smtp.helo=k46.kb8c70eb.use4.send.mailgun.net
+X-ME-Authentication-Results: phl-mx-03.messagingengine.com;
+    x-tls=pass smtp.version=TLSv1.2 smtp.cipher=ECDHE-RSA-AES256-GCM-SHA384
+      smtp.bits=256/256;
+    x-vs=clean score=0 state=0
+Authentication-Results: phl-mx-03.messagingengine.com;
+    x-csa=none;
+    x-me-sender=none;
+    x-ptr=pass smtp.helo=k46.kb8c70eb.use4.send.mailgun.net
+      policy.ptr=k46.kb8c70eb.use4.send.mailgun.net
+Authentication-Results: phl-mx-03.messagingengine.com;
+    bimi=none (No BIMI records found)
+Authentication-Results: phl-mx-03.messagingengine.com;
+    arc=pass (as.1.mailgun.org=pass, ams.1.mailgun.org=pass)
+      smtp.remote-ip=204.220.184.46
+Authentication-Results: phl-mx-03.messagingengine.com;
+    dkim=pass (1024-bit rsa key sha256) header.d=teamhealth.io
+      header.i=@teamhealth.io header.b=lXu6IIb3 header.a=rsa-sha256
+      header.s=mx;
+    dkim=pass (2048-bit rsa key sha256) header.d=willowventurecapitalnow.com
+      header.i=@willowventurecapitalnow.com header.b=iDhgbQPh
+      header.a=rsa-sha256 header.s=google;
+    dmarc=pass policy.published-domain-policy=reject
+      policy.published-subdomain-policy=reject
+      policy.applied-disposition=none policy.evaluated-disposition=none
+      (p=reject,sp=reject,d=none,d.eval=none) policy.policy-from=p
+      header.from=willowventurecapitalnow.com;
+    iprev=pass smtp.remote-ip=204.220.184.46
+      (k46.kb8c70eb.use4.send.mailgun.net);
+    spf=permerror
+      smtp.mailfrom=
+      "bounce+4d3403.1f5bcd-mailgun=xxx@xxx.xxx"
+      smtp.helo=k46.kb8c70eb.use4.send.mailgun.net
+X-ME-VSCause: gggruggvucftvghtrhhoucdtuddrgeeffedrtdeggdefkedvfecutefuodetggdotefrod
+    ftvfcurfhrohhfihhlvgemucfhrghsthforghilhdpuffrtefokffrpgfnqfghnecuuegr
+    ihhlohhuthemuceftddtnecunecujfgurhepkfgjfhfhvffugfffgggtsehtqhertddttd
+    ejnecuhfhrohhmpefnvggvucfkghhlvghsihgrshcuoehlvggvseifihhllhhofihvvghn
+    thhurhgvtggrphhithgrlhhnohifrdgtohhmqeenucggtffrrghtthgvrhhnpedvleeuvd
+    ekuefftdduvdegieetfeeufeekuefgudduvdetudefteekgeduhefhhfenucfkphepvddt
+    gedrvddvtddrudekgedrgeeipdefgedrvdefiedrudegfedrvddttdenucevlhhushhtvg
+    hrufhiiigvpedtnecurfgrrhgrmhepihhnvghtpedvtdegrddvvddtrddukeegrdegiedp
+    hhgvlhhopehkgeeirdhksgektgejtdgvsgdruhhsvgegrdhsvghnugdrmhgrihhlghhunh
+    drnhgvthdpmhgrihhlfhhrohhmpeeosghouhhntggvodegugefgedtfedrudhfhegstggu
+    qdhmrghilhhguhhnpehotghhrhhonhhushdrtghomhesthgvrghmhhgvrghlthhhrdhioh
+    eqpdhnsggprhgtphhtthhopedupdhrtghpthhtohepoehmrghilhhguhhnsehotghhrhho
+    nhhushdrtghomheq
+X-ME-VSScore: 0
+X-ME-VSCategory: clean
+X-ME-CSA: none
+X-ME-Received: <xmx:40TIaOlGQHsGe17s8l0RsAkWDGeOZ1NoDEKkHZu9a_sa4QvKFYTn2A>
+X-ME-Received: <xmx:40TIaJ4c0XCYCFf_-0Vk4XROJSnxbROQ3iQcR5atMgikN7RfBjvl4w>
+Received-SPF: permerror
+    (teamhealth.io: Redundant applicable 'v=spf1' sender policies found)
+    receiver=phl-mx-03.messagingengine.com;
+    identity=mailfrom;
+    envelope-from="bounce+4d3403.1f5bcd-mailgun=xxx@xxx.xxx";
+    helo=k46.kb8c70eb.use4.send.mailgun.net;
+    client-ip=204.220.184.46
+Received: from k46.kb8c70eb.use4.send.mailgun.net (k46.kb8c70eb.use4.send.mailgun.net [204.220.184.46])
+	(using TLSv1.2 with cipher ECDHE-RSA-AES256-GCM-SHA384 (256/256 bits))
+	(No client certificate requested)
+	by phl-mx-03.messagingengine.com (Postfix) with ESMTPS id 93C6A4BA3EBB
+	for <xxx@xxx.xxx>; Mon, 15 Sep 2025 12:54:59 -0400 (EDT)
+ARC-Seal: i=1; cv=none; a=rsa-sha256; d=mailgun.org; s=mg; t=1757955297;
+ b=aZJRfXclORK0D7s7a0yaoKI1sfvcbdAWkXU36jr6QZXOELOWjX6CHAJQnvT/XQxotBsQ3NAWpQMxkqiG9Nm5KW75Gh0ArEgSQi6GsGy0SspSJZGXSRFHsa6TpX1rrwV/jRbDBh03LYHlMy65k7kR4bQg1ad8nIIFajeVkObEX9Q=
+ARC-Message-Signature: i=1; a=rsa-sha256; c=relaxed/relaxed; d=mailgun.org; s=mg; t=1757955297;
+ h=Content-Type: MIME-Version: Date: Content-Transfer-Encoding: Subject: Subject: To: To: From: From: References: In-Reply-To: Message-ID: Sender: DKIM-Signature: DKIM-Signature;
+ bh=iMJ+piFAsWawrCdErfEbO9GF1U7q9JQ6KmcFYwz73F0=;
+ b=RKHck3BG81aGNTSYpZ8y4rD8OqoEEMUa9gm6+slJaCEik2SXz7vcksqYhNA07lB0DcCBiZQ48hENrVPx/rmggdCXmiVScnvaugaobLnzfLOBKu7T8ausGh8ACOj5BMxThvb1ZqXPh1E0sReb9hkskAWM42nHBGrQ9BdqSJz9r2I=
+ARC-Authentication-Results: i=1; mailgun.org;
+ dkim=pass header.d=willowventurecapitalnow.com header.s=google header.b=iDhgbQPh;
+ spf=pass (domain willowventurecapitalnow.com designates 209.85.219.52 as permitted sender) smtp.mailfrom="lee@willowventurecapitalnow.com";
+ dmarc=pass (dkim=pass domain=willowventurecapitalnow.com) header.from=willowventurecapitalnow.com;
+ arc=none
+DKIM-Signature: a=rsa-sha256; v=1; c=relaxed/relaxed; d=teamhealth.io; q=dns/txt; s=mx; t=1757955297; x=1757962497;
+ h=Content-Type: MIME-Version: Date: Content-Transfer-Encoding: Subject: Subject: To: To: From: From: References: In-Reply-To: Message-ID: Sender;
+ bh=iMJ+piFAsWawrCdErfEbO9GF1U7q9JQ6KmcFYwz73F0=;
+ b=lXu6IIb3LlFF+yCopu86JZVtpdwQ+hdwx94EXk0g7sh22+pJx68gn/02NFh6DfYXYRwWsahZQIZHcc0EtYeHtQHxq9LtwUB8MzbLpea6C1He53CHLUAnMkL24p2zcR9ufAQ8uBrOVXA9AGPGEyWbA2KxQ2cj5RtXWzKHDBpkE5A=
+Received: from mail-qv1-f52.google.com (mail-qv1-f52.google.com [209.85.219.52]) by
+ 8dfd3d5e0fb3ecb75d1aaec054927cb55e61b7f841073cc521b4c7227241c300 with SMTP id
+ 68c844e1f28c5257723d15fa (version=TLS1.3, cipher=TLS_AES_128_GCM_SHA256);
+ Mon, 15 Sep 2025 16:54:57 GMT
+X-Mailgun-Sending-Ip: 204.220.184.46
+X-Mailgun-Incoming: Yes
+X-Envelope-From: lee@willowventurecapitalnow.com
+Received: from mail-qv1-f52.google.com (mail-qv1-f52.google.com [209.85.219.52]) by
+ 8dfd3d5e0fb3ecb75d1aaec054927cb55e61b7f841073cc521b4c7227241c300 with SMTP id
+ <undefined> (version=TLS1.3, cipher=TLS_AES_128_GCM_SHA256); Mon, 15 Sep 2025
+ 16:54:56 GMT
+Received: by mail-qv1-f52.google.com with SMTP id 6a1803df08f44-7799a118b87so15235296d6.3
+        for <xxx@xxx.xxx>; Mon, 15 Sep 2025 09:54:56 -0700 (PDT)
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=willowventurecapitalnow.com; s=google; t=1757955295; x=1758560095; darn=teamhealth.io;
+        h=mime-version:date:content-transfer-encoding:subject:to:from
+         :references:in-reply-to:message-id:from:to:cc:subject:date
+         :message-id:reply-to;
+        bh=iMJ+piFAsWawrCdErfEbO9GF1U7q9JQ6KmcFYwz73F0=;
+        b=iDhgbQPhYEq3JLE8Q4pwaBYKXx4c/OAbrhLBC6PccyVxQSTTMlIMVV/HIY/1CNCOR0
+         HZv3EseyiNQNu25fBu2n8VuEVA6AyCMLGUFzq5xy6cvO7c52FC4pDoz91fhLLehB5nHS
+         ZvD1sqZJGt2V/tKHAFiZ5NrVKx+5G/AwlTnK+3P4Jz8/IE861Cz4X4jF8JlzmDXZdleb
+         DSjYQRP7CxCqvGbM8RlXsOXkuYGhlCxQsavvUoA+smc3ZQUrC9d8cCFWPKxta59XkClq
+         aOAos4Ies8DQ0+HQ58bZwatpInJSherhb53AScFtGq4BCVVZM6bqyZMX5a+3OF4KQ8Wn
+         ZyZg==
+X-Google-DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=1e100.net; s=20230601; t=1757955295; x=1758560095;
+        h=mime-version:date:content-transfer-encoding:subject:to:from
+         :references:in-reply-to:message-id:x-gm-message-state:from:to:cc
+         :subject:date:message-id:reply-to;
+        bh=iMJ+piFAsWawrCdErfEbO9GF1U7q9JQ6KmcFYwz73F0=;
+        b=OQ1syHdC0zBBIcrUIphz3paWuZaWmKwiWKnU8JPcuh516vHHtVgzRQKSzQqZpGBrnD
+         XVkeyPjlUw5O6zX9v9nsKu0uaoF2Hw9/XXCAcR+p5PNeJdLnZhmML2aOt2UNOgm9WeJy
+         rnALCUs6eWXUbWo0PxxwXXOV0mAQ/m0vs5b776w91WuA1JD7bqDceJ18a7soTlmb1QlQ
+         1MsJx4qR23I3r6j8l/fNSP8QWGcBJ1qhieOACFdb9QwbV2eoL3aivudqFr87+PlUDldd
+         ha/etWg6jMkBHXzZODJ9x4kGGwrurUZYOCEK1MA2d+gq/mekeSb8GZewY6/e7jE7I6pG
+         e12Q==
+X-Gm-Message-State: AOJu0Yy8NODS9Rv0A5A3OwUngKUXkL+I0TVTjHjQkrswuQO8mN9KnWFf
+	O0FyNq9pLXGl/SJ8poinrib+LLO6Lw4vAyyYcN2x8A0hoAgihe9IUNPAU7ZmCsoa78gWC0zKECR
+	ESekRBw==
+X-Gm-Gg: ASbGnctM8Y5aZzRostLbaMKYwW4iVqdBASHNsGGA83gUCUmrRVf8zPorY8UA51SHKV9
+	MVqeXxCkyJOkP3d15VQs+1fj75NRUFvZCCzuMf2VIqvwFIXeevB7QUbHDoJcRDupoYRsP/mgkRg
+	MH3i60VWTKz7l7fPrbKeZeH2hAoktBBthJEy9NkRSe5BLBvghthrNhqAEEolTfiihcxHCw/CZHi
+	9EY/raOY5azXnb1zSbS7wajOFtQF5E8clN8Fqt800S6c2naetBiwtBZqefI0bYZ355dLv/HZQH/
+	+7XrPInqls3+TphlRmjUAdQQzMPtsRuh7j2e1qB7EPTSS7wxxFklxU2uU9XCdNdhsgaxMHxajYY
+	ZfUmo6UgTjzwvT3zgB+az2tsEAJSpTTXEGv4E9dMW0YPGXWA4NFPHBLcx3wzl0mfr7gFR5ATCLY
+	Jo9xArq1O90gyP8yliBc6ywh4o5vcYK+Jelr4sSOv7+s3aGue+QEFwKw1HqwgnwFPRZZ4/HQ==
+X-Google-Smtp-Source: AGHT+IHSkW41jPil3EZO4KtzPwOOMozvzyJRe7AJubpnF3rmmM4zlYAoYVVFrY4SRwU2QSfEa6J/6g==
+X-Received: by 2002:ad4:5b88:0:b0:78b:8530:ad06 with SMTP id 6a1803df08f44-78b8530ad86mr16996876d6.9.1757955294583;
+        Mon, 15 Sep 2025 09:54:54 -0700 (PDT)
+Received: from 01994e4d-02d9-7c98-8895-f5c5c7d77b59.local (ec2-34-236-143-200.compute-1.amazonaws.com. [34.236.143.200])
+        by smtp.gmail.com with ESMTPSA id 6a1803df08f44-763bf4394f1sm81819286d6.49.2025.09.15.09.54.54
+        for <xxx@xxx.xxx>
+        (version=TLS1_3 cipher=TLS_AES_256_GCM_SHA384 bits=256/256);
+        Mon, 15 Sep 2025 09:54:54 -0700 (PDT)
+Message-ID:
+ <01994e4d-02d9-7c98-8895-f5c5c7d77b59@willowventurecapitalnow.com>
+In-Reply-To:
+ <019939d8-0a7f-7d10-8f4a-8a31c869cf71@willowventurecapitalnow.com>
+References:
+ <019939d8-0a7f-7d10-8f4a-8a31c869cf71@willowventurecapitalnow.com>
+From: Lee Iglesias <lee@willowventurecapitalnow.com>
+To: xxx@xxx.xxx
+Subject: Re: We choose D Y
+Content-Transfer-Encoding: quoted-printable
+Date: Mon, 15 Sep 2025 16:54:54 +0000
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+Hello Danny, =C2=A0
+
+If you=E2=80=99re curious to see a ballpark quote =
+without too much paperwork, all I=E2=80=99d need is: =C2=A0
+
+- The last three months business statements (I have a link you can drop =
+them into) =C2=A0
+- Your personal FICO =C2=A0
+
+Are you open to reviewing =
+some options? =C2=A0
+
+
+
+Warm regards,
+Lee Iglesias=C2=A0
+
+On Thu, September 11, 2025 5:34 PM, Lee Iglesias <lee@willowventurecapitaln=
+ow.com>
+[lee@willowventurecapitalnow.com]> wrote:
+
+> Hey Danny,
+>=20
+> Our recent programs are ending on 9/29. The highlights include:
+>=20
+> - Funding up to 4 million
+> - One to three year options
+> - Rate breaks for early repayment as well as return clients
+> - 24-hour closing
+>=20
+> The requirements are just a filled-out digital =
+application and four months statements.
+>=20
+> Would you be opposed to =
+going over options for D Y?
+>=20
+>=20
+> Lee Iglesias
+> Executive Advisor
+> Willow
+>=20
+> If this isn=E2=80=99t useful, please let me know.
+> On Mon, September 8, 2025 7:05 PM, Lee Iglesias <lee@willowventurecapital=
+now.com>
+> [lee@willowventurecapitalnow.com]> wrote:
+>=20
+> > Danny,
+> >=20
+> > We have been seeing more favorable terms for your business type due to =
+new trends in the economy.
+> >=20
+> > If you're currently doing business =
+with another funding partner, I genuinely believe we can come in stronger.
+> >=20
+> > Can you make use of additional funding?
+> >=20
+> >=20
+> > Best regards,
+> > Lee Iglesias
+> > On Fri, September 5, 2025 5:53 PM, =
+Lee Iglesias <lee@willowventurecapitalnow.com>
+> > [lee@willowventurecapita=
+lnow.com]> wrote:
+> >=20
+> > > Hey,
+> > >=20
+> > > This is a note to =
+highlight our new programs we=E2=80=99re offering right now:
+> > >=20
+> > > - One to three year working capital options
+> > > - Bonuses for both =
+early payoff and rolling over your balance with us
+> > > - Take out up to 4=
+ other positions
+> > > - Same day wire
+> > >=20
+> > > Open to seeing =
+options for D Y? Let me know if you want more info sent.
+> > >=20
+> > > Warm regards
+> > > Lee Iglesias
+> > > On Tue, September 2, 2025 4:36 =
+PM, Lee Iglesias <lee@willowventurecapitalnow.com>
+> > > =
+[lee@willowventurecapitalnow.com]> wrote:
+> > >=20
+> > > > Hello Danny,
+> > > >=20
+> > > > My company has recently released new 10 to 36 month =
+funding options with a same day turnaround, along with other incentives.
+> > > >=20
+> > > > The only requirements are a filled-out digital =
+application and 3-months statements.
+> > > >=20
+> > > > Could you make us =
+of more funds for D Y this month?
+> > > >=20
+> > > >=20
+> > > > Lee Iglesias
+> > > > Senior Specialist
+> > > > Willow
+> > > >=20
+> > > > If now=E2=80=99s not the right time, let me know.
+> > > >

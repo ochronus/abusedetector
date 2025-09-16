@@ -1,0 +1,225 @@
+Return-Path: <bounce+4d3403.1f5bcd-mailgun=xxx@xxx.xxx>
+Received: from phl-compute-03.internal (phl-compute-03.internal [10.202.2.43])
+	 by slotpi04m34 (Cyrus 3.13.0-alpha0-1223-gceee3026b-fm-20250908.001-gceee3026) with LMTPA;
+	 Mon, 15 Sep 2025 12:22:01 -0400
+X-Cyrus-Session-Id: slotpi04m34-1757953321-3718386-2-13140617875553011778
+X-Sieve: CMU Sieve 3.0
+X-Spam-known-sender: no
+X-Spam-sender-reputation: 0 (email)
+X-Spam-score: 10.0
+X-Spam-hits: BAYES_60 1.5, HEADER_FROM_DIFFERENT_DOMAINS 0.001, LOTS_OF_MONEY 0.001,
+  ME_SC_NH -0.001, ME_SENDERREP_DENY 4, ME_VADESPAM_MED 2.5,
+  MONEY_NOHTML 2.022, RCVD_IN_DNSWL_NONE -0.0001, SPF_HELO_NONE 0.001,
+  T_SPF_PERMERROR 0.01, LANGUAGES en, BAYES_USED user, SA_VERSION 4.0.1
+X-Spam-source: IP='204.220.184.46', Host='k46.kb8c70eb.use4.send.mailgun.net',
+  Country='US', FromHeader='co', MailFrom='io'
+X-Spam-charsets: plain='utf-8'
+X-Resolved-to: xxx@xxx.xxx
+X-Delivered-to: xxx@xxx.xxx
+X-Original-Delivered-to: xxx@xxx.xxx
+X-Mail-from: bounce+4d3403.1f5bcd-mailgun=xxx@xxx.xxx
+Received: from phl-mx-05 ([10.202.2.204])
+  by phl-compute-03.internal (LMTPProxy); Mon, 15 Sep 2025 12:22:01 -0400
+Received: from phl-mx-05.messagingengine.com (localhost [127.0.0.1])
+	by mailmx.phl.internal (Postfix) with ESMTP id 0D16D5D2004F
+	for <xxx@xxx.xxx>; Mon, 15 Sep 2025 12:22:01 -0400 (EDT)
+Received: from mailmx.phl.internal (localhost [127.0.0.1])
+    by phl-mx-05.messagingengine.com (Authentication Milter) with ESMTP
+    id 12159D84367.AF5EA5D200A0;
+    Mon, 15 Sep 2025 12:22:01 -0400
+ARC-Seal: i=2; a=rsa-sha256; cv=pass; d=messagingengine.com; s=fm1; t=
+    1757953321; b=Xv2PgRnG1mlYOQevyeKs4pKFP8bkcGGTkvFB8WAM1gOWl02wDr
+    a47kiliLsBWMEMgGRf0zdc/6Y7mZubc75DMIOBnfCbYTJzflmDIa1dqayOtZeSLX
+    isOsIQUHxSFJYMP++A72BSn0SLTwME4B7m8c51iqoIyDlvQXMOrSkTPwFFg5yRrn
+    vZWMa7v9vBm3vsivhVuacd7UpSStKFHLpGzg71JiHeo5p4hA1QQQ6Nyt22KMTUIw
+    bJcj5nrHph2iLefYfQPNWjrVXIrKh9pOzT03JQJUPJvBH/B5qM31/1kszkOTwy17
+    9ZxEWzfK7TMFvzC11nHhF2dfwYxz2cJdvGJA==
+ARC-Message-Signature: i=2; a=rsa-sha256; c=relaxed/relaxed; d=
+    messagingengine.com; h=message-id:from:to:subject
+    :content-transfer-encoding:date:mime-version:content-type; s=
+    fm1; t=1757953321; bh=C0U+xQLoPK71vIYKtNctf7HP8YT0JsjZgTv5jHANFV
+    U=; b=Ie10I8DTJ1R81jt5lz5NEeAn4MzN2qmWV0+xo3bmRA8IRzPuW3S6nxUGHd
+    K2t9QxjjMP9YaqSSQUzUpKF5YnkKy2Di6KeJljq0BPJrnS2bXi31V/nbXzwajNYc
+    pQTaahALF5KB4RetI8w4XoIMud6v6Sa2b1fY/CHAaTvVYzzN5GXCO4qDieQZbWNU
+    gq3gZBCan8ZTxviDnRXDrY2/ahntser1A/fLNBNkVpNsQPGOC4B97/3JkZbyFY2O
+    84e0fjfvCkN5RHuxq7K9pTsgznrwrp/qF9h5pooQRtd4CSdfYAK+mqiXvqsROtsq
+    vDcsWJCYj2BeWE+B1dw7FqGy/YZA==
+ARC-Authentication-Results: i=2; phl-mx-05.messagingengine.com;
+    x-csa=none;
+    x-me-sender=none;
+    x-ptr=pass smtp.helo=k46.kb8c70eb.use4.send.mailgun.net
+    policy.ptr=k46.kb8c70eb.use4.send.mailgun.net;
+    bimi=skipped (DMARC Policy is not at enforcement);
+    arc=pass (as.1.mailgun.org=pass, ams.1.mailgun.org=pass)
+    smtp.remote-ip=204.220.184.46;
+    dkim=pass (1024-bit rsa key sha256) header.d=teamhealth.io
+    header.i=@teamhealth.io header.b=DT59ljH7 header.a=rsa-sha256
+    header.s=mx;
+    dkim=pass (2048-bit rsa key sha256) header.d=carebrain.co
+    header.i=@carebrain.co header.b=qAwo1P0c header.a=rsa-sha256
+    header.s=google;
+    dmarc=pass policy.published-domain-policy=none
+    policy.applied-disposition=none policy.evaluated-disposition=none
+    (p=none,d=none,d.eval=none) policy.policy-from=p
+    header.from=carebrain.co;
+    iprev=pass smtp.remote-ip=204.220.184.46
+    (k46.kb8c70eb.use4.send.mailgun.net);
+    spf=permerror
+    smtp.mailfrom=
+    "bounce+4d3403.1f5bcd-mailgun=xxx@xxx.xxx"
+    smtp.helo=k46.kb8c70eb.use4.send.mailgun.net
+X-ME-Authentication-Results: phl-mx-05.messagingengine.com;
+    x-tls=pass smtp.version=TLSv1.2 smtp.cipher=ECDHE-RSA-AES256-GCM-SHA384
+      smtp.bits=256/256;
+    x-vs=spam:medium score=300 state=1
+Authentication-Results: phl-mx-05.messagingengine.com;
+    x-csa=none;
+    x-me-sender=none;
+    x-ptr=pass smtp.helo=k46.kb8c70eb.use4.send.mailgun.net
+      policy.ptr=k46.kb8c70eb.use4.send.mailgun.net
+Authentication-Results: phl-mx-05.messagingengine.com;
+    bimi=skipped (DMARC Policy is not at enforcement)
+Authentication-Results: phl-mx-05.messagingengine.com;
+    arc=pass (as.1.mailgun.org=pass, ams.1.mailgun.org=pass)
+      smtp.remote-ip=204.220.184.46
+Authentication-Results: phl-mx-05.messagingengine.com;
+    dkim=pass (1024-bit rsa key sha256) header.d=teamhealth.io
+      header.i=@teamhealth.io header.b=DT59ljH7 header.a=rsa-sha256
+      header.s=mx;
+    dkim=pass (2048-bit rsa key sha256) header.d=carebrain.co
+      header.i=@carebrain.co header.b=qAwo1P0c header.a=rsa-sha256
+      header.s=google;
+    dmarc=pass policy.published-domain-policy=none
+      policy.applied-disposition=none policy.evaluated-disposition=none
+      (p=none,d=none,d.eval=none) policy.policy-from=p
+      header.from=carebrain.co;
+    iprev=pass smtp.remote-ip=204.220.184.46
+      (k46.kb8c70eb.use4.send.mailgun.net);
+    spf=permerror
+      smtp.mailfrom=
+      "bounce+4d3403.1f5bcd-mailgun=xxx@xxx.xxx"
+      smtp.helo=k46.kb8c70eb.use4.send.mailgun.net
+X-ME-VSCause: gggruggvucftvghtrhhoucdtuddrgeeffedrtdeggdefkeduhecutefuodetggdotefrod
+    ftvfcurfhrohhfihhlvgemucfhrghsthforghilhdpuffrtefokffrpgfnqfghnecuuegr
+    ihhlohhuthemuceftddtnecuogfgmfegfeefqdehgeculdeftddtmdenucfjughrpefkhf
+    fvuffgffggtgesthhqredttddtjeenucfhrhhomhepofgvlhhishhsrgcupfgrshhhuceo
+    mhgvlhhishhsrghnrghshhestggrrhgvsghrrghinhdrtghoqeenucggtffrrghtthgvrh
+    hnpedvveeggfdvheejjeefhfehfeegieevjeetueetvdfffeevgfevveffvddtudelhfen
+    ucfkphepvddtgedrvddvtddrudekgedrgeeipddukeegrdejfedruddttddruddvtdenuc
+    evlhhushhtvghrufhiiigvpedtnecurfgrrhgrmhepihhnvghtpedvtdegrddvvddtrddu
+    keegrdegiedphhgvlhhopehkgeeirdhksgektgejtdgvsgdruhhsvgegrdhsvghnugdrmh
+    grihhlghhunhdrnhgvthdpmhgrihhlfhhrohhmpeeosghouhhntggvodegugefgedtfedr
+    udhfhegstgguqdhmrghilhhguhhnpehotghhrhhonhhushdrtghomhesthgvrghmhhgvrg
+    hlthhhrdhioheqpdhnsggprhgtphhtthhopedupdhrtghpthhtohepoehmrghilhhguhhn
+    sehotghhrhhonhhushdrtghomheq
+X-ME-VSScore: 300
+X-ME-VSCategory: spam:medium
+X-ME-CSA: none
+X-ME-Received: <xmx:KD3IaPaZ77J311QpZanXoSTRpvXH8_BsVr_CGKTzmG7d4cZI22HKVw>
+X-ME-Received: <xmx:KD3IaFemEALPwM0qwpxfpEmSvgnpK1m9VHxUB1oTbXSOL42WlBsUFg>
+Received-SPF: permerror
+    (teamhealth.io: Redundant applicable 'v=spf1' sender policies found)
+    receiver=phl-mx-05.messagingengine.com;
+    identity=mailfrom;
+    envelope-from="bounce+4d3403.1f5bcd-mailgun=xxx@xxx.xxx";
+    helo=k46.kb8c70eb.use4.send.mailgun.net;
+    client-ip=204.220.184.46
+Received: from k46.kb8c70eb.use4.send.mailgun.net (k46.kb8c70eb.use4.send.mailgun.net [204.220.184.46])
+	(using TLSv1.2 with cipher ECDHE-RSA-AES256-GCM-SHA384 (256/256 bits))
+	(No client certificate requested)
+	by phl-mx-05.messagingengine.com (Postfix) with ESMTPS id AF5EA5D200A0
+	for <xxx@xxx.xxx>; Mon, 15 Sep 2025 12:22:00 -0400 (EDT)
+ARC-Seal: i=1; cv=none; a=rsa-sha256; d=mailgun.org; s=mg; t=1757953319;
+ b=ljoDPfs37DZANjVYTcgZbQjzW12GnvNjzfLO9DhSkVBvwfEGQVYGrgYDrT3jibsKMUCfZ5JQPZ9/0Z3NSWTzBaX+MMWBlHjWcp/5pVbwIQ07I9KPYrW/vW+45U2GiS8d1z6vGBOO9qMO0nHFkn6fSYW6C+kbTd2d0NdQtrFb40s=
+ARC-Message-Signature: i=1; a=rsa-sha256; c=relaxed/relaxed; d=mailgun.org; s=mg; t=1757953319;
+ h=Content-Type: MIME-Version: Date: Content-Transfer-Encoding: Subject: Subject: To: To: From: From: Message-ID: Sender: DKIM-Signature: DKIM-Signature;
+ bh=C0U+xQLoPK71vIYKtNctf7HP8YT0JsjZgTv5jHANFVU=;
+ b=Wq99UIQL/4yU89/VLw712mh4IL8cp8pGRmAAG7E601815LE+iJcWdnUvmhzB7w3fgNnwFmSW9wh8r9ANf/riVvlSn/BPYylHXLvobbfdRYq7PFk86FNkm9p2NllN07y5730rXs3RnBM4i78juJXxVJ6fCmD7Qj24OtVRQJlb9H0=
+ARC-Authentication-Results: i=1; mailgun.org;
+ dkim=pass header.d=carebrain.co header.s=google header.b=qAwo1P0c;
+ spf=pass (domain carebrain.co designates 209.85.222.179 as permitted sender) smtp.mailfrom="melissanash@carebrain.co";
+ dmarc=pass (dkim=pass domain=carebrain.co) header.from=carebrain.co;
+ arc=none
+DKIM-Signature: a=rsa-sha256; v=1; c=relaxed/relaxed; d=teamhealth.io; q=dns/txt; s=mx; t=1757953319; x=1757960519;
+ h=Content-Type: MIME-Version: Date: Content-Transfer-Encoding: Subject: Subject: To: To: From: From: Message-ID: Sender;
+ bh=C0U+xQLoPK71vIYKtNctf7HP8YT0JsjZgTv5jHANFVU=;
+ b=DT59ljH7MYpF4WUQJQrA73+bcqwr2VovWy8kLbQBrv0NMid4dok2z7lgL2ZYPJo/5g7okl6kT6CAHEmWktnUO4Qj2+WW6owwc73mAfdDNyB1aP6hxy4UZy+q7zcaDJ5rnhAkBZzOYFstXSO8bKOkssk14dqz2aEkzpRbioWha88=
+Received: from mail-qk1-f179.google.com (mail-qk1-f179.google.com [209.85.222.179]) by
+ 44f7ce307cdd8c96105447845f35795c7002ab6dfb3892975edcf1e231d24f58 with SMTP id
+ 68c83d2722ac9871589bc132 (version=TLS1.3, cipher=TLS_AES_128_GCM_SHA256);
+ Mon, 15 Sep 2025 16:21:59 GMT
+X-Mailgun-Sending-Ip: 204.220.184.46
+X-Mailgun-Incoming: Yes
+X-Envelope-From: melissanash@carebrain.co
+Received: from mail-qk1-f179.google.com (mail-qk1-f179.google.com [209.85.222.179]) by
+ 44f7ce307cdd8c96105447845f35795c7002ab6dfb3892975edcf1e231d24f58 with SMTP id
+ <undefined> (version=TLS1.3, cipher=TLS_AES_128_GCM_SHA256); Mon, 15 Sep 2025
+ 16:21:59 GMT
+Received: by mail-qk1-f179.google.com with SMTP id af79cd13be357-827ec18434aso203079385a.0
+        for <xxx@xxx.xxx>; Mon, 15 Sep 2025 09:21:58 -0700 (PDT)
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=carebrain.co; s=google; t=1757953318; x=1758558118; darn=teamhealth.io;
+        h=mime-version:date:content-transfer-encoding:subject:to:from
+         :message-id:from:to:cc:subject:date:message-id:reply-to;
+        bh=C0U+xQLoPK71vIYKtNctf7HP8YT0JsjZgTv5jHANFVU=;
+        b=qAwo1P0ceedJAeCkxsSXKfcjyoBKOuK3564gYipeaqHvmxxrcgqnTStmKzrrlef4/k
+         I8XaQkY+GWd1tXfyqpeJ+MMkxP58Bf0064eS9z78YCpYDGHOpNpLjSJGi9LUVhPXOJ+i
+         i2J1vAd377rMuwzdIw8TLw+GuaW00Ub5pLnkTRFSTpWZV2Ja8oOttMQ1msjunP1S/02N
+         T1ge3/LZ4LG//R8TnVLX5z60TeeVeQIBOxi43fNV0x4zu9XWCsmE04WdIOe6HNuC+bl7
+         FUPUfIqEaYNM/TI8skTaeommGHEq3y/+dzzErXQVygiKkXRpWxCIE8+1Ue5yOgr+bNB4
+         dBvA==
+X-Google-DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=1e100.net; s=20230601; t=1757953318; x=1758558118;
+        h=mime-version:date:content-transfer-encoding:subject:to:from
+         :message-id:x-gm-message-state:from:to:cc:subject:date:message-id
+         :reply-to;
+        bh=C0U+xQLoPK71vIYKtNctf7HP8YT0JsjZgTv5jHANFVU=;
+        b=VFsIsmUGxBI/UbXl5m2WJQMlIOF6B7pSuXc23YcRImrR7UrTJreu2L+FGc/viAHKaU
+         LYBxoQbehX22Yqnh9uhwljKEjteVG0AhmzoBVkGRtwoEk0KNyydH1RuB8RxJxRCymiSe
+         fg+WmILfsI/xJI6XYpbJuXMd0yddGCn/0Fl24fBzra30y6uuAicAz1xyUM+Gt+rA8bov
+         VH1IYsYPOLQIIfk85Z3w8akejntoz0+4iy65Z3g01MB5qEI+b18AuwXckVHmCXRXDoH5
+         fHnbRydpRzeahSIe2D8xl9i76Jkqck4lhqxUGQQAnfA1YePOfVfGKG48CE17sEgb4ay4
+         fKlA==
+X-Gm-Message-State: AOJu0YxvPkLfk7WNrmdRrz9hp8OFdejp69Cyvz3/tregrRm8Ok3Gio/s
+	IHvFMDr9ZxrI6lTE7F/IzRfoVcYSc3hHE68me4CFeD2TEq02EwoO0JJT34OezWMTrV/cI4V7w2q
+	JrLn9
+X-Gm-Gg: ASbGnctzsgET4vg9FqA+S39sTyqS120IAZW7jTp5xGqkctg9ONPYjnmn77E0dTpfyIv
+	WwltJOj8P13ysrcsTDk/UDJyP4pCK4EFyVaO+N/0UzXKeVSLjfsO9aQBiLXmpkDXIlkZqbRPnoX
+	mun385GAf5OawPYFOnerF0ipKEiAXmnnonrPb14Y2CYbPdHsTLlpPXXcwEIr2Ij5DFc+eVYjw5k
+	11e9tCxGz8rGdb8aeTCW7NhFahhZBLQrnKMl9BjKuT0D16To8mG9yBPZsdCV5zMFjRgU1sKIPZy
+	y/ln/Y5TAlFyiMS0kJXvADyfdLPvUaydaXhUp2wImouAYRJAVhuECIPNB7dRG7d30pCKG9A67W6
+	YY5GNVkF2DmKmUrhOjbvjYc6aE4j64QikkwH+RuG6C7AxWVDYDduDR4GjaQBxaKWVPgIIE/+ru6
+	rXLBJcT+gMsXjPOMxJKYO2wDtqhTnZrVB92VjTKWEZ7mPIabPypOQpk1awSdoq
+X-Google-Smtp-Source: AGHT+IFimc7YwYv8CRjySPlgW/nVC2B8x7VxmZhikAHNvdL6zOOabPxvTWlWstMrgTbTZWoJHwe90Q==
+X-Received: by 2002:a05:620a:44c7:b0:828:cac9:f48a with SMTP id af79cd13be357-828caca1848mr562011385a.26.1757953317968;
+        Mon, 15 Sep 2025 09:21:57 -0700 (PDT)
+Received: from 01994e2e-da37-7d9c-ad93-95c89c41fe31.local (ec2-184-73-100-120.compute-1.amazonaws.com. [184.73.100.120])
+        by smtp.gmail.com with ESMTPSA id af79cd13be357-82b19347ef5sm44176285a.44.2025.09.15.09.21.57
+        for <xxx@xxx.xxx>
+        (version=TLS1_3 cipher=TLS_AES_256_GCM_SHA384 bits=256/256);
+        Mon, 15 Sep 2025 09:21:57 -0700 (PDT)
+Message-ID: <01994e2e-da37-7d9c-ad93-95c89c41fe31@carebrain.co>
+From: Melissa Nash <melissanash@carebrain.co>
+To: xxx@xxx.xxx
+Subject: Hate being on call?
+Content-Transfer-Encoding: quoted-printable
+Date: Mon, 15 Sep 2025 16:21:57 +0000
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+
+Hi Edwards!
+
+I saw that you were a SNF provider. We make SNF video visits =
+work like magic. Nurses can connect to you in just a click, while your =
+notes and billing are done for you automatically with AI.
+
+One provider is pulling in $13,721 more revenue each month.
+
+Want to see a quick demo?
+
+Regards,
+
+Dr. Melissa Nash, DNP
+Carebrain Founder
+650-772-2542
+carebrain.com

@@ -727,8 +727,6 @@ impl DualEscalationPath {
 
     /// Create escalation path for sender's domain hosting
     async fn create_sender_hosting_path(domain: &str) -> Result<EscalationPath> {
-        // Look up A records for the domain
-        use trust_dns_resolver::proto::rr::{Name, RecordType};
         use trust_dns_resolver::{
             config::{ResolverConfig, ResolverOpts},
             TokioAsyncResolver,
@@ -736,26 +734,99 @@ impl DualEscalationPath {
 
         let resolver =
             TokioAsyncResolver::tokio(ResolverConfig::default(), ResolverOpts::default());
-        let domain_name = Name::from_ascii(domain)?;
 
+        // Try the original domain first
+        let mut lookup_domain = domain.to_string();
+        let mut lookup_result = Self::try_domain_lookup(&resolver, &lookup_domain).await;
+
+        // If the original domain fails and it looks like a subdomain, try the parent domain
+        if lookup_result.is_err() {
+            let parts: Vec<&str> = domain.split('.').collect();
+            if parts.len() >= 3 {
+                // Check for common email/marketing subdomains
+                let first_part = parts[0];
+                if matches!(
+                    first_part,
+                    "em" | "email"
+                        | "mail"
+                        | "newsletter"
+                        | "marketing"
+                        | "promo"
+                        | "campaign"
+                        | "try"
+                ) {
+                    let parent_domain = parts[1..].join(".");
+                    lookup_domain = parent_domain;
+                    lookup_result = Self::try_domain_lookup(&resolver, &lookup_domain).await;
+                }
+            }
+        }
+
+        // If still failing, try the registrable domain
+        if lookup_result.is_err() {
+            let parts: Vec<&str> = lookup_domain.split('.').collect();
+            if parts.len() >= 2 {
+                let registrable = format!("{}.{}", parts[parts.len() - 2], parts[parts.len() - 1]);
+                if registrable != lookup_domain {
+                    lookup_domain = registrable;
+                    lookup_result = Self::try_domain_lookup(&resolver, &lookup_domain).await;
+                }
+            }
+        }
+
+        // Create escalation path based on results
+        match lookup_result {
+            Ok(ipv4) => {
+                // Found hosting IP - create full escalation path with hosting and domain info
+                EscalationPath::new(
+                    ipv4,
+                    Some(lookup_domain),
+                    None, // No hostname for hosting lookup
+                )
+                .await
+            }
+            Err(_) => {
+                // No hosting IP found - create domain-only escalation path
+                Self::create_domain_only_escalation_path(&lookup_domain).await
+            }
+        }
+    }
+
+    /// Create escalation path based only on domain registration info (when no hosting IP available)
+    async fn create_domain_only_escalation_path(domain: &str) -> Result<EscalationPath> {
+        let mut path = EscalationPath {
+            ip: std::net::Ipv4Addr::new(0, 0, 0, 0), // Placeholder IP for domain-only paths
+            domain: Some(domain.to_string()),
+            contacts: Vec::new(),
+            asn_info: None,
+            cloud_provider: None,
+            generated_at: chrono::Utc::now(),
+        };
+
+        // Add domain-based escalation contacts directly
+        path.add_domain_escalation_contacts(domain).await?;
+
+        Ok(path)
+    }
+
+    /// Try to lookup A records for a specific domain
+    async fn try_domain_lookup(
+        resolver: &trust_dns_resolver::TokioAsyncResolver,
+        domain: &str,
+    ) -> Result<std::net::Ipv4Addr> {
+        use trust_dns_resolver::proto::rr::{Name, RecordType};
+
+        let domain_name = Name::from_ascii(domain)?;
         let response = resolver.lookup(domain_name, RecordType::A).await?;
 
         // Get the first A record IP
         if let Some(record) = response.iter().next() {
             if let Some(ip_addr) = record.as_a() {
-                let ipv4 = ip_addr.0;
-
-                // Create escalation path for the hosting IP
-                return EscalationPath::new(
-                    ipv4,
-                    Some(domain.to_string()),
-                    None, // No hostname for hosting lookup
-                )
-                .await;
+                return Ok(ip_addr.0);
             }
         }
 
-        Err(anyhow::anyhow!("No A records found for domain: {}", domain))
+        Err(anyhow::anyhow!("No A records found"))
     }
 
     /// Get recommended escalation order prioritizing email vs hosting paths
