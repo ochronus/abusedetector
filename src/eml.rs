@@ -258,14 +258,14 @@ mod tests {
     use crate::netutil::{is_private, is_reserved};
     const SAMPLE: &str = "\
 Return-Path: <sender@example.org>
-Received: from mail.example.org (mail.example.org [198.51.100.23])
+Received: from mail.example.org (mail.example.org [8.8.8.8])
     by inbound.filter.local (Postfix) with ESMTPS id 12345
     for <user@local>; Tue, 17 Sep 2024 12:34:56 +0000 (UTC)
-Received: from laptop (cpe-203-0-113-5.example.net [203.0.113.5])
+Received: from laptop (cpe-94-156-175-86.example.net [94.156.175.86])
     by mail.example.org (Postfix) with ESMTPSA id 77777
     for <user@local>; Tue, 17 Sep 2024 12:34:10 +0000 (UTC)
 Subject: Test
-X-Originating-IP: [203.0.113.5]
+X-Originating-IP: [94.156.175.86]
 
 Body here
 ";
@@ -280,15 +280,15 @@ Body here
     #[test]
     fn test_parse_originating_ip_prefers_x_originating() {
         let ip = parse_eml_origin_ip(SAMPLE).unwrap();
-        assert_eq!(ip, Ipv4Addr::new(203, 0, 113, 5));
+        assert_eq!(ip, Ipv4Addr::new(94, 156, 175, 86));
     }
 
     #[test]
     fn test_received_only() {
-        let alt = SAMPLE.replace("X-Originating-IP: [203.0.113.5]\n", "");
+        let alt = SAMPLE.replace("X-Originating-IP: [94.156.175.86]\n", "");
         let ip = parse_eml_origin_ip(&alt).unwrap();
-        // earliest (bottom-most public) is 203.0.113.5
-        assert_eq!(ip, Ipv4Addr::new(203, 0, 113, 5));
+        // earliest (bottom-most public) is 94.156.175.86
+        assert_eq!(ip, Ipv4Addr::new(94, 156, 175, 86));
     }
 
     #[test]
