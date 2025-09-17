@@ -25,6 +25,7 @@
 //! ```
 
 // Re-export all modules for library use
+pub mod analysis;
 pub mod app;
 pub mod cli;
 pub mod config;
@@ -43,12 +44,13 @@ pub mod styled_output;
 pub mod whois;
 
 // Re-export commonly used types and functions for convenience
+pub use analysis::{
+    AbuseAnalysis, AnalysisOptions, AnalysisStats, ContactEntry, Domain, DualEscalation,
+};
 pub use emails::{EmailSet, FinalizeOptions};
 pub use errors::{AbuseDetectorError, Result};
 pub use escalation::{EscalationContactType, EscalationPath};
-pub use facade::{
-    AbuseAnalysis, AbuseDetector, AbuseEmailContact, AnalysisOptions, AnalysisStats, IpSource,
-};
+pub use facade::AbuseDetector;
 pub use netutil::{is_private, is_reserved};
 pub use output::{AbuseContact, AbuseResults, ContactSource, OutputFormat};
 pub use styled_output::StyledFormatter;

@@ -1,5 +1,5 @@
 use std::net::{IpAddr, Ipv4Addr};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::Instant;
 
 use trust_dns_resolver::{
@@ -8,13 +8,14 @@ use trust_dns_resolver::{
     TokioAsyncResolver,
 };
 
+use crate::analysis::{AbuseAnalysis, AnalysisOptions, AnalysisStats, ContactEntry};
 use crate::domain_utils;
 use crate::emails::{soa_rname_to_email, EmailSet, FinalizeOptions};
 use crate::eml::{self, IpExtractionResult};
 use crate::errors::{AbuseDetectorError, Result};
 use crate::escalation::DualEscalationPath;
 use crate::netutil::{is_private, is_reserved};
-use crate::output::{AbuseContact, AbuseResults, ContactMetadata, ContactSource, QueryMetadata};
+use crate::output::QueryMetadata;
 // Sources pipeline (replaces removed net_orchestrator)
 use crate::sources::{
     AbuseNetSource, ContactSource as _, DnsSoaSource, QueryContext, ReverseDnsSource,
@@ -116,23 +117,26 @@ impl AbuseDetector {
         };
         let finalized = emails.finalize(finalize_opts);
 
-        let contacts: Vec<AbuseEmailContact> = finalized
-            .iter()
-            .map(|(email, confidence)| AbuseEmailContact {
-                email: email.clone(),
-                confidence: *confidence,
-                is_abuse_specific: email.starts_with("abuse@"),
+        let primary_contacts: Vec<ContactEntry> = finalized
+            .into_iter()
+            .map(|(email, confidence)| {
+                let is_abuse_specific = email.starts_with("abuse@");
+                ContactEntry {
+                    email,
+                    confidence: confidence.min(u8::MAX as u32) as u8,
+                    is_abuse_specific,
+                }
             })
             .collect();
 
         // Optional escalation
-        let escalation = if opts.generate_escalation || contacts.is_empty() {
+        let mut warnings = std::mem::take(&mut metadata.warnings);
+
+        let escalation = if opts.generate_escalation || primary_contacts.is_empty() {
             match DualEscalationPath::from_eml_analysis(ip, metadata.hostname.clone(), None).await {
                 Ok(p) => Some(p),
                 Err(e) => {
-                    metadata
-                        .warnings
-                        .push(format!("Escalation generation failed: {e}"));
+                    warnings.push(format!("Escalation generation failed: {e}"));
                     None
                 }
             }
@@ -141,22 +145,17 @@ impl AbuseDetector {
         };
 
         Ok(AbuseAnalysis {
-            input: InputMetadata {
-                ip: Some(ip),
-                ip_source: IpSource::Direct,
-                eml_file: None,
-                sender_domain: None,
-                hostname: metadata.hostname.clone(),
-                from_eml: false,
-            },
-            contacts,
+            ip: Some(ip),
+            sender_domain: None,
+            hostname: metadata.hostname.clone(),
+            primary_contacts,
             escalation,
             stats: AnalysisStats {
                 dns_queries: metadata.dns_queries,
                 whois_servers_queried: metadata.whois_servers_queried,
                 duration_ms: metadata.duration_ms.unwrap_or(0),
-                warnings: metadata.warnings,
             },
+            warnings,
         })
     }
 
@@ -176,10 +175,10 @@ impl AbuseDetector {
             }) if !is_private(IpAddr::V4(v4)) && !is_reserved(IpAddr::V4(v4)) => {
                 // Delegate to IP path but embed EML context
                 let mut analysis = Self::analyze_ip(v4, opts.clone()).await?;
-                analysis.input.from_eml = true;
-                analysis.input.eml_file = Some(path.to_path_buf());
-                analysis.input.sender_domain = sender_domain;
-                analysis.input.ip_source = IpSource::EmlHeader;
+                analysis.sender_domain = sender_domain;
+                analysis
+                    .warnings
+                    .push(format!("Analyzed from EML: {}", path.display()));
                 Ok(analysis)
             }
             Ok(IpExtractionResult { ip, .. }) => {
@@ -254,17 +253,20 @@ async fn domain_fallback(
     };
     let finalized = emails.finalize(finalize_opts);
 
-    let contacts: Vec<AbuseEmailContact> = finalized
-        .iter()
-        .map(|(email, confidence)| AbuseEmailContact {
-            email: email.clone(),
-            confidence: *confidence,
-            is_abuse_specific: email.starts_with("abuse@"),
+    let primary_contacts: Vec<ContactEntry> = finalized
+        .into_iter()
+        .map(|(email, confidence)| {
+            let is_abuse_specific = email.starts_with("abuse@");
+            ContactEntry {
+                email,
+                confidence: confidence.min(u8::MAX as u32) as u8,
+                is_abuse_specific,
+            }
         })
         .collect();
 
     // Optional escalation (still permitted with fallback)
-    let escalation = if opts.generate_escalation || contacts.is_empty() {
+    let escalation = if opts.generate_escalation || primary_contacts.is_empty() {
         match DualEscalationPath::from_eml_analysis(FALLBACK_IP, None, sender_domain.clone()).await
         {
             Ok(p) => Some(p),
@@ -278,22 +280,17 @@ async fn domain_fallback(
     };
 
     Ok(AbuseAnalysis {
-        input: InputMetadata {
-            ip: Some(FALLBACK_IP),
-            ip_source: IpSource::DomainFallback,
-            eml_file: Some(path.to_path_buf()),
-            sender_domain,
-            hostname: None,
-            from_eml: true,
-        },
-        contacts,
+        ip: None,
+        sender_domain,
+        hostname: None,
+        primary_contacts,
         escalation,
         stats: AnalysisStats {
             dns_queries: metadata.dns_queries,
             whois_servers_queried: metadata.whois_servers_queried,
             duration_ms: metadata.duration_ms.unwrap_or(0),
-            warnings,
         },
+        warnings,
     })
 }
 
@@ -341,136 +338,4 @@ async fn traverse_soa(
 }
 
 /* ----------------------------- Public Data Model --------------------------- */
-
-/// Aggregated runtime toggles (CLI-independent).
-#[derive(Clone, Debug)]
-pub struct AnalysisOptions {
-    pub use_hostname: bool,
-    pub use_abusenet: bool,
-    pub use_dns_soa: bool,
-    pub use_whois_ip: bool,
-    pub generate_escalation: bool,
-    pub show_commands: bool,
-    pub dns_timeout_secs: u64,
-    /// Maximum number of concurrent network tasks (reverse DNS, reverse SOA, WHOIS)
-    pub concurrency_limit: usize,
-}
-
-impl Default for AnalysisOptions {
-    fn default() -> Self {
-        Self {
-            use_hostname: true,
-            use_abusenet: true,
-            use_dns_soa: true,
-            use_whois_ip: true,
-            generate_escalation: true,
-            show_commands: false,
-            dns_timeout_secs: 5,
-            concurrency_limit: 3,
-        }
-    }
-}
-
-impl AnalysisOptions {
-    /// Create an instance with all external network lookups disabled.
-    pub fn minimal() -> Self {
-        Self {
-            use_hostname: false,
-            use_abusenet: false,
-            use_dns_soa: false,
-            use_whois_ip: false,
-            generate_escalation: false,
-            show_commands: false,
-            dns_timeout_secs: 5,
-            concurrency_limit: 1,
-        }
-    }
-}
-
-/// Stand-in structure to satisfy APIs expecting a subset of CLI behavior.
-/// Only implements what the underlying functions read.
-/// Normalized result produced by the façade.
-#[derive(Debug)]
-pub struct AbuseAnalysis {
-    pub input: InputMetadata,
-    pub contacts: Vec<AbuseEmailContact>,
-    pub escalation: Option<DualEscalationPath>,
-    pub stats: AnalysisStats,
-}
-
-impl AbuseAnalysis {
-    /// Convert façade analysis into the legacy `AbuseResults` structure
-    /// used by existing output formatting paths.
-    pub fn to_abuse_results(&self) -> AbuseResults {
-        let contacts = self
-            .contacts
-            .iter()
-            .map(|c| AbuseContact {
-                email: c.email.clone(),
-                confidence: c.confidence,
-                source: ContactSource::Unknown,
-                metadata: ContactMetadata {
-                    domain: c.email.split('@').nth(1).map(|s| s.to_string()),
-                    is_abuse_specific: c.is_abuse_specific,
-                    filtered: false,
-                    notes: vec![],
-                },
-            })
-            .collect::<Vec<_>>();
-
-        AbuseResults {
-            ip: self.input.ip.unwrap_or(FALLBACK_IP),
-            contacts,
-            metadata: QueryMetadata {
-                from_eml: self.input.from_eml,
-                eml_file: self
-                    .input
-                    .eml_file
-                    .as_ref()
-                    .map(|p| p.display().to_string()),
-                hostname: self.input.hostname.clone(),
-                dns_queries: self.stats.dns_queries,
-                whois_servers_queried: self.stats.whois_servers_queried,
-                warnings: self.stats.warnings.clone(),
-                duration_ms: Some(self.stats.duration_ms),
-                ..Default::default()
-            },
-        }
-    }
-}
-
-/// Input context metadata.
-#[derive(Debug)]
-pub struct InputMetadata {
-    pub ip: Option<Ipv4Addr>,
-    pub ip_source: IpSource,
-    pub eml_file: Option<PathBuf>,
-    pub sender_domain: Option<String>,
-    pub hostname: Option<String>,
-    pub from_eml: bool,
-}
-
-/// Classification of how the IP (or lack thereof) was determined.
-#[derive(Debug)]
-pub enum IpSource {
-    Direct,
-    EmlHeader,
-    DomainFallback,
-}
-
-/// Simple contact representation for the façade consumer.
-#[derive(Debug, Clone)]
-pub struct AbuseEmailContact {
-    pub email: String,
-    pub confidence: u32,
-    pub is_abuse_specific: bool,
-}
-
-/// Statistical + diagnostic data about the analysis run.
-#[derive(Debug)]
-pub struct AnalysisStats {
-    pub dns_queries: u32,
-    pub whois_servers_queried: u32,
-    pub duration_ms: u64,
-    pub warnings: Vec<String>,
-}
+// unified analysis structs moved to `crate::analysis`

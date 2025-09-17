@@ -557,8 +557,8 @@ impl EscalationPath {
         let query_label = query.clone();
         let whois = WhoIs::from_string(include_str!("../data/whois-servers.json"))
             .map_err(|e| anyhow::anyhow!(e.to_string()))?;
-        let mut options = WhoIsLookupOptions::from_string(&query)
-            .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+        let mut options =
+            WhoIsLookupOptions::from_string(&query).map_err(|e| anyhow::anyhow!(e.to_string()))?;
         options.timeout = Some(Duration::from_secs(10));
 
         timeout(Duration::from_secs(10), whois.lookup_async(options))

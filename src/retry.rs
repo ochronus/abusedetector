@@ -218,8 +218,8 @@ fn add_jitter(delay: Duration) -> Duration {
     use rand::Rng;
 
     let jitter_range = delay.as_millis() as f64 * 0.1; // 10% jitter
-    let mut rng = rand::thread_rng();
-    let jitter = rng.gen_range(-jitter_range..=jitter_range);
+    let mut rng = rand::rng();
+    let jitter: f64 = rng.random_range(-jitter_range..=jitter_range);
 
     let jittered_ms = (delay.as_millis() as f64 + jitter).max(0.0) as u64;
     Duration::from_millis(jittered_ms)
