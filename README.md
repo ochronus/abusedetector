@@ -645,17 +645,17 @@ abusedetector --eml message.eml --yaml --show-escalation > report.yaml
 
 ### Cross-Platform Testing
 
-The project uses GitHub Actions CI with a comprehensive test matrix covering:
+The project uses GitHub Actions CI with a focused test matrix covering:
 
 - **Operating Systems**: Linux (Ubuntu), macOS, and Windows
-- **Rust Toolchains**: Stable (all platforms), Beta + Nightly (Linux only)
-- **MSRV Support**: Minimum Supported Rust Version (1.70.0) verification
+- **Rust Toolchain**: Stable (current release) on all platforms
+- **MSRV Support**: Minimum Supported Rust Version (1.75.0) verification
 - **Features**: All tests run with `--all-features` for complete coverage
 
 **Platform-Specific Notes**:
 - Windows: Uses vendored OpenSSL and native-tls for HTTP client compatibility
 - macOS: Standard build with system dependencies
-- Linux: Full testing including coverage analysis and nightly toolchain
+- Linux: Full testing including coverage analysis
 
 All pull requests automatically trigger the full matrix, ensuring cross-platform compatibility before merge.
 
