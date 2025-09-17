@@ -39,7 +39,7 @@ use crate::emails::{soa_rname_to_email, EmailSet, FinalizeOptions};
 use crate::eml::{self, IpExtractionResult};
 use crate::errors::{AbuseDetectorError, Result};
 use crate::escalation::DualEscalationPath;
-use crate::netutil::{domain_of, ip_to_inaddr, is_private, is_reserved, reverse_dns};
+use crate::netutil::{domain_of, is_private, is_reserved, reverse_dns};
 use crate::output::{
     AbuseContact, AbuseResults, ContactMetadata, ContactSource, OutputFormat as OutputFormatOrig,
     QueryMetadata,
@@ -226,25 +226,149 @@ impl App {
             ..Default::default()
         };
 
-        // Reverse DNS (optional)
-        let hostname = if !cli.no_use_hostname {
-            if cli.is_trace() {
-                eprintln!("Reverse DNS lookup for {ip}...");
-            }
-            metadata.dns_queries += 1;
-            reverse_dns(std::net::IpAddr::V4(ip), cli.show_commands)
-                .await
-                .unwrap_or(None)
-        } else {
-            None
-        };
-        metadata.hostname = hostname.clone();
+        // --- Parallel Network Phase (Reverse DNS + Reverse SOA + WHOIS) ---
+        // Improvement Plan 4.1 (full):
+        // Run independent network lookups concurrently with bounded concurrency.
+        // Tasks:
+        //   * Reverse DNS (hostname)
+        //   * Reverse SOA traversal (in-addr.arpa chain)
+        //   * WHOIS IP chain
+        //
+        // Each task returns a typed enum; results are merged after completion.
+        // Forward SOA traversal & abuse.net remain after this phase (need hostname).
+        use futures::{future::BoxFuture, FutureExt};
+        use futures::{stream::FuturesUnordered, StreamExt};
+        use std::sync::Arc;
+        use tokio::sync::Semaphore;
 
+        // Local enum describing heterogeneous network task outputs
+        #[derive(Debug)]
+        enum ParallelResult {
+            ReverseDns(Option<String>, u32), // (hostname, dns_query_count)
+            ReverseSoa {
+                emails: EmailSet,
+                dns_queries: u32,
+            },
+            Whois {
+                emails: EmailSet,
+                whois_servers: u32,
+            },
+        }
+
+        let mut parallel: FuturesUnordered<BoxFuture<'static, ParallelResult>> =
+            FuturesUnordered::new();
+
+        let semaphore = Arc::new(Semaphore::new(3)); // allow up to 3 concurrent network tasks
+        let cli_arc = Arc::new(cli.clone());
+
+        // Reverse DNS
+        if !cli.no_use_hostname {
+            let sem = semaphore.clone();
+            let cli_ref = cli_arc.clone();
+            let show_cmds = cli_ref.show_commands;
+            let trace = cli_ref.is_trace();
+            parallel.push(
+                async move {
+                    let _permit = sem.acquire().await;
+                    if trace {
+                        eprintln!("Reverse DNS lookup for {ip}...");
+                    }
+                    // Reverse DNS counts as one DNS query
+                    let host = reverse_dns(std::net::IpAddr::V4(ip), show_cmds)
+                        .await
+                        .unwrap_or(None);
+                    ParallelResult::ReverseDns(host, 1)
+                }
+                .boxed(),
+            );
+        }
+
+        // Reverse SOA traversal (in-addr.arpa) independent of hostname
+        if !cli.no_use_dns_soa {
+            let sem = semaphore.clone();
+            let cli_ref = cli_arc.clone();
+            let rev_name = crate::netutil::ip_to_inaddr(std::net::IpAddr::V4(ip));
+            parallel.push(
+                async move {
+                    let _permit = sem.acquire().await;
+                    let mut local_set = EmailSet::new();
+                    let mut local_meta = QueryMetadata::default();
+                    if let Err(e) =
+                        traverse_soa(&rev_name, &mut local_set, &cli_ref, &mut local_meta).await
+                    {
+                        if cli_ref.warn_enabled() {
+                            eprintln!("Warning: Reverse SOA traversal failed: {e}");
+                        }
+                    }
+                    ParallelResult::ReverseSoa {
+                        emails: local_set,
+                        dns_queries: local_meta.dns_queries,
+                    }
+                }
+                .boxed(),
+            );
+        }
+
+        // WHOIS IP chain
+        if !cli.no_use_whois_ip {
+            let sem = semaphore.clone();
+            let cli_ref = cli_arc.clone();
+            parallel.push(
+                async move {
+                    let _permit = sem.acquire().await;
+                    let mut local_set = EmailSet::new();
+                    let mut servers = 0u32;
+                    if let Err(e) = whois_ip_chain(ip, &mut local_set, &cli_ref).await {
+                        if cli_ref.warn_enabled() {
+                            eprintln!("Warning: WHOIS chain query failed: {e}");
+                        }
+                    } else {
+                        servers = 1; // count root chain invocation; deeper referrals not separately tallied here
+                    }
+                    ParallelResult::Whois {
+                        emails: local_set,
+                        whois_servers: servers,
+                    }
+                }
+                .boxed(),
+            );
+        }
+
+        // Collect and merge results
+        while let Some(res) = parallel.next().await {
+            match res {
+                ParallelResult::ReverseDns(host_opt, dns_q) => {
+                    metadata.hostname = host_opt;
+                    metadata.dns_queries = metadata.dns_queries.saturating_add(dns_q);
+                }
+                ParallelResult::ReverseSoa {
+                    emails: set,
+                    dns_queries,
+                } => {
+                    for (email, conf) in set.finalize(FinalizeOptions::default()) {
+                        emails.add_with_conf(email, conf);
+                    }
+                    metadata.dns_queries = metadata.dns_queries.saturating_add(dns_queries);
+                }
+                ParallelResult::Whois {
+                    emails: set,
+                    whois_servers,
+                } => {
+                    for (email, conf) in set.finalize(FinalizeOptions::default()) {
+                        emails.add_with_conf(email, conf);
+                    }
+                    metadata.whois_servers_queried =
+                        metadata.whois_servers_queried.saturating_add(whois_servers);
+                }
+            }
+        }
+
+        let hostname = metadata.hostname.clone();
         if cli.is_trace() {
             eprintln!("Hostname: {}", hostname.as_deref().unwrap_or("<none>"));
         }
 
-        // abuse.net (based on hostname's registrable domain)
+        // abuse.net (depends on hostname's registrable domain)
         if !cli.no_use_abusenet {
             metadata.abuse_net_queried = true;
             if let Some(ref h) = hostname {
@@ -260,7 +384,7 @@ impl App {
             }
         }
 
-        // DNS SOA traversal (hostname + reverse in-addr)
+        // Forward SOA traversal (now that hostname—if any—is known)
         if !cli.no_use_dns_soa {
             if let Some(ref h) = hostname {
                 if let Err(e) = traverse_soa(h, &mut emails, cli, &mut metadata).await {
@@ -270,27 +394,6 @@ impl App {
                             .push(format!("DNS SOA traversal failed for hostname: {e}"));
                     }
                 }
-            }
-            let rev = ip_to_inaddr(std::net::IpAddr::V4(ip));
-            if let Err(e) = traverse_soa(&rev, &mut emails, cli, &mut metadata).await {
-                if cli.warn_enabled() {
-                    metadata
-                        .warnings
-                        .push(format!("DNS SOA traversal failed for reverse IP: {e}"));
-                }
-            }
-        }
-
-        // WHOIS IP chain
-        if !cli.no_use_whois_ip {
-            if let Err(e) = whois_ip_chain(ip, &mut emails, cli).await {
-                if cli.warn_enabled() {
-                    metadata
-                        .warnings
-                        .push(format!("WHOIS chain query failed: {e}"));
-                }
-            } else {
-                metadata.whois_servers_queried += 1;
             }
         }
 
