@@ -372,6 +372,9 @@ pub struct QueryStatistics {
 
     /// Network-related statistics
     pub network_stats: NetworkStats,
+
+    /// Aggregated confidence summary per discovered email (post-finalization)
+    pub confidence_summary: Vec<ConfidenceEntry>,
 }
 
 /// Time breakdown for different processing phases
@@ -423,6 +426,14 @@ pub struct NetworkStats {
 
     /// Number of failed connections
     pub failed_connections: u32,
+}
+
+/// Confidence summary entry (email + aggregated confidence score)
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub struct ConfidenceEntry {
+    pub email: String,
+    pub confidence: u32,
 }
 
 /// Result summary and status
@@ -506,6 +517,7 @@ impl AbuseDetectorOutput {
                     timeouts: 0,
                     failed_connections: 0,
                 },
+                confidence_summary: Vec::new(),
             },
             warnings: Vec::new(),
             result: ResultSummary {

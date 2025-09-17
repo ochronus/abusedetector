@@ -10,6 +10,39 @@ use tokio::time::timeout;
 use crate::cli::Cli;
 use crate::emails::{is_plausible_email, EmailSet};
 
+/// Abstraction over environment / verbosity for WHOIS & abuse.net lookups.
+/// This removes the direct dependency of core WHOIS functions on the concrete
+/// CLI type and enables reuse inside the façade / sources abstractions.
+pub trait WhoisEnv {
+    fn show_commands(&self) -> bool;
+    fn is_trace(&self) -> bool;
+    fn warn_enabled(&self) -> bool;
+}
+
+impl WhoisEnv for Cli {
+    fn show_commands(&self) -> bool {
+        self.show_commands
+    }
+    fn is_trace(&self) -> bool {
+        self.is_trace()
+    }
+    fn warn_enabled(&self) -> bool {
+        self.warn_enabled()
+    }
+}
+
+impl WhoisEnv for std::sync::Arc<Cli> {
+    fn show_commands(&self) -> bool {
+        self.as_ref().show_commands()
+    }
+    fn is_trace(&self) -> bool {
+        self.as_ref().is_trace()
+    }
+    fn warn_enabled(&self) -> bool {
+        self.as_ref().warn_enabled()
+    }
+}
+
 /// WHOIS TCP port.
 const WHOIS_PORT: u16 = 43;
 
@@ -48,11 +81,15 @@ pub async fn simple_whois(server: &str, query: &str, to: Duration) -> Result<Str
 /// the legacy behavior where abuse.net responses boosted confidence.
 ///
 /// Silently returns Ok(()) for network / timeout errors (treating them as "no data").
-pub async fn query_abuse_net(domain: &str, emails: &mut EmailSet, opts: &Cli) -> Result<()> {
-    if opts.show_commands {
+pub async fn query_abuse_net<E: WhoisEnv + ?Sized>(
+    domain: &str,
+    emails: &mut EmailSet,
+    env: &E,
+) -> Result<()> {
+    if env.show_commands() {
         eprintln!("(cmd) whois -h whois.abuse.net {domain}");
     }
-    if opts.is_trace() {
+    if env.is_trace() {
         eprintln!("Querying whois.abuse.net for {domain}");
     }
 
@@ -64,7 +101,7 @@ pub async fn query_abuse_net(domain: &str, emails: &mut EmailSet, opts: &Cli) ->
     let resp = match simple_whois("whois.abuse.net", domain, Duration::from_secs(8)).await {
         Ok(r) => r,
         Err(e) => {
-            if opts.warn_enabled() {
+            if env.warn_enabled() {
                 eprintln!("(abuse.net) warning: {e}");
             }
             return Ok(());
@@ -77,7 +114,7 @@ pub async fn query_abuse_net(domain: &str, emails: &mut EmailSet, opts: &Cli) ->
         if is_plausible_email(&email) {
             emails.add_candidate(&email);
             emails.bump(&email);
-            if opts.is_trace() {
+            if env.is_trace() {
                 eprintln!("  abuse.net => {email}");
             }
         }
@@ -92,7 +129,11 @@ pub async fn query_abuse_net(domain: &str, emails: &mut EmailSet, opts: &Cli) ->
 ///
 /// Lightweight WHOIS response parser focused on practical extraction of abuse-related
 /// emails and referral following across common RIR servers.
-pub async fn whois_ip_chain(ip: Ipv4Addr, emails: &mut EmailSet, opts: &Cli) -> Result<()> {
+pub async fn whois_ip_chain<E: WhoisEnv + ?Sized>(
+    ip: Ipv4Addr,
+    emails: &mut EmailSet,
+    env: &E,
+) -> Result<()> {
     let mut server = "whois.arin.net".to_string();
     let ip_str = ip.to_string();
 
@@ -103,17 +144,17 @@ pub async fn whois_ip_chain(ip: Ipv4Addr, emails: &mut EmailSet, opts: &Cli) -> 
         Regex::new(r"(?im)^\s*ReferralServer:\s*whois://([A-Z0-9._\-]+)\s*$").unwrap();
 
     for depth in 0..MAX_WHOIS_DEPTH {
-        if opts.show_commands {
+        if env.show_commands() {
             eprintln!("(cmd) whois -h {server} {ip_str}");
         }
-        if opts.is_trace() {
+        if env.is_trace() {
             eprintln!("WHOIS(depth={depth}) server={server}");
         }
 
         let resp = match simple_whois(&server, &ip_str, Duration::from_secs(10)).await {
             Ok(r) => r,
             Err(e) => {
-                if opts.warn_enabled() {
+                if env.warn_enabled() {
                     eprintln!("WHOIS warning on {server}: {e}");
                 }
                 break;
@@ -125,7 +166,7 @@ pub async fn whois_ip_chain(ip: Ipv4Addr, emails: &mut EmailSet, opts: &Cli) -> 
             let email = cap[1].to_ascii_lowercase();
             if is_plausible_email(&email) {
                 emails.add_with_conf(&email, 1);
-                if opts.is_trace() {
+                if env.is_trace() {
                     eprintln!("  WHOIS email => {email}");
                 }
             }
@@ -143,7 +184,7 @@ pub async fn whois_ip_chain(ip: Ipv4Addr, emails: &mut EmailSet, opts: &Cli) -> 
 
         match next {
             Some(n) if n != server => {
-                if opts.is_trace() {
+                if env.is_trace() {
                     eprintln!("  Referral to {n}");
                 }
                 server = n;
@@ -193,13 +234,13 @@ pub struct CymruAsnInfo {
 ///
 /// Returns detailed ASN information that's often missing from regular WHOIS.
 /// Format: "AS | IP | BGP Prefix | CC | Registry | Allocated | AS Name"
-pub async fn query_cymru_asn(ip: Ipv4Addr, opts: &Cli) -> Result<CymruAsnInfo> {
+pub async fn query_cymru_asn<E: WhoisEnv + ?Sized>(ip: Ipv4Addr, env: &E) -> Result<CymruAsnInfo> {
     let query = format!(" -v {}", ip);
 
-    if opts.show_commands {
+    if env.show_commands() {
         eprintln!("(cmd) whois -h whois.cymru.com '{}'", query);
     }
-    if opts.is_trace() {
+    if env.is_trace() {
         eprintln!("Querying Team Cymru for ASN info: {}", ip);
     }
 
@@ -215,7 +256,7 @@ pub async fn query_cymru_asn(ip: Ipv4Addr, opts: &Cli) -> Result<CymruAsnInfo> {
         let parts: Vec<&str> = line.split('|').map(|s| s.trim()).collect();
         if parts.len() >= 7 {
             if let Ok(asn) = parts[0].parse::<u32>() {
-                if opts.is_trace() {
+                if env.is_trace() {
                     eprintln!("  Cymru ASN => AS{} ({})", asn, parts[6]);
                 }
 

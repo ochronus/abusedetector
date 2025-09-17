@@ -13,8 +13,13 @@ use crate::emails::{soa_rname_to_email, EmailSet, FinalizeOptions};
 use crate::eml::{self, IpExtractionResult};
 use crate::errors::{AbuseDetectorError, Result};
 use crate::escalation::DualEscalationPath;
-use crate::netutil::{ip_to_inaddr, is_private, is_reserved, reverse_dns};
+use crate::netutil::{is_private, is_reserved};
 use crate::output::{AbuseContact, AbuseResults, ContactMetadata, ContactSource, QueryMetadata};
+// Sources pipeline (replaces removed net_orchestrator)
+use crate::sources::{
+    AbuseNetSource, ContactSource as _, DnsSoaSource, QueryContext, ReverseDnsSource,
+    SourceOptions, WhoisIpSource,
+};
 
 /// Placeholder IP used during domain-only fallback (no usable IPv4 extracted).
 const FALLBACK_IP: Ipv4Addr = Ipv4Addr::new(0, 0, 0, 0);
@@ -54,47 +59,52 @@ impl AbuseDetector {
             ..Default::default()
         };
 
-        // Reverse DNS
-        let hostname = if opts.use_hostname {
-            metadata.dns_queries += 1;
-            reverse_dns(IpAddr::V4(ip), opts.show_commands)
-                .await
-                .unwrap_or(None)
-        } else {
-            None
+        // Sources pipeline orchestration (reverse DNS, SOA, WHOIS, abuse.net)
+        let source_opts = SourceOptions {
+            enable_reverse_dns: opts.use_hostname,
+            enable_dns_soa: opts.use_dns_soa,
+            enable_whois: opts.use_whois_ip,
+            enable_abusenet: opts.use_abusenet,
+            enable_pattern_domains: false,
+            dns_timeout_secs: opts.dns_timeout_secs,
         };
-        metadata.hostname = hostname.clone();
-
-        // abuse.net based on registrable domain (from hostname if present)
-        if opts.use_abusenet {
-            metadata.abuse_net_queried = true;
-            // NOTE: abuse.net lookup skipped in façade (depends on full CLI context).
-            // Future: inject a trait-based provider so we can reuse here.
+        let mut ctx = QueryContext::new(Some(ip), None, None, source_opts).await?;
+        // Assemble pipeline (order matters: hostname -> SOA -> WHOIS -> abuse.net)
+        if opts.use_hostname {
+            // PatternDomainSource not used here (no sender domain for direct IP path)
+            let _ = ReverseDnsSource
+                .collect(&mut ctx)
+                .await
+                .map(|raws| ctx.ingest(raws));
         }
-
-        // DNS SOA traversal
         if opts.use_dns_soa {
-            if let Some(ref h) = hostname {
-                if let Err(e) = traverse_soa(h, &mut emails, &opts, &mut metadata).await {
-                    metadata
-                        .warnings
-                        .push(format!("DNS SOA traversal failed (hostname): {e}"));
-                }
-            }
-            let rev = ip_to_inaddr(IpAddr::V4(ip));
-            if let Err(e) = traverse_soa(&rev, &mut emails, &opts, &mut metadata).await {
-                metadata
-                    .warnings
-                    .push(format!("DNS SOA traversal failed (reverse): {e}"));
-            }
+            let _ = DnsSoaSource
+                .collect(&mut ctx)
+                .await
+                .map(|raws| ctx.ingest(raws));
+        }
+        if opts.use_whois_ip {
+            let _ = WhoisIpSource
+                .collect(&mut ctx)
+                .await
+                .map(|raws| ctx.ingest(raws));
+        }
+        if opts.use_abusenet {
+            let _ = AbuseNetSource
+                .collect(&mut ctx)
+                .await
+                .map(|raws| ctx.ingest(raws));
         }
 
-        // WHOIS chain
-        if opts.use_whois_ip {
-            // NOTE: WHOIS chain lookup skipped in façade (needs CLI-oriented path & network policy).
-            metadata
-                .warnings
-                .push("WHOIS chain lookup skipped in façade API".to_string());
+        // Merge context results
+        metadata.hostname = ctx.reverse_hostname.clone();
+        metadata.dns_queries = metadata.dns_queries.saturating_add(ctx.dns_queries);
+        metadata.whois_servers_queried = metadata
+            .whois_servers_queried
+            .saturating_add(ctx.whois_servers);
+        metadata.warnings.extend(ctx.warnings.clone());
+        for (email, conf) in ctx.into_email_set().into_sorted() {
+            emails.add_with_conf(email, conf);
         }
 
         // Finalization
@@ -116,7 +126,7 @@ impl AbuseDetector {
 
         // Optional escalation
         let escalation = if opts.generate_escalation || contacts.is_empty() {
-            match DualEscalationPath::from_eml_analysis(ip, hostname.clone(), None).await {
+            match DualEscalationPath::from_eml_analysis(ip, metadata.hostname.clone(), None).await {
                 Ok(p) => Some(p),
                 Err(e) => {
                     metadata
@@ -135,7 +145,7 @@ impl AbuseDetector {
                 ip_source: IpSource::Direct,
                 eml_file: None,
                 sender_domain: None,
-                hostname,
+                hostname: metadata.hostname.clone(),
                 from_eml: false,
             },
             contacts,
@@ -341,6 +351,8 @@ pub struct AnalysisOptions {
     pub generate_escalation: bool,
     pub show_commands: bool,
     pub dns_timeout_secs: u64,
+    /// Maximum number of concurrent network tasks (reverse DNS, reverse SOA, WHOIS)
+    pub concurrency_limit: usize,
 }
 
 impl Default for AnalysisOptions {
@@ -353,6 +365,7 @@ impl Default for AnalysisOptions {
             generate_escalation: true,
             show_commands: false,
             dns_timeout_secs: 5,
+            concurrency_limit: 3,
         }
     }
 }
@@ -368,6 +381,7 @@ impl AnalysisOptions {
             generate_escalation: false,
             show_commands: false,
             dns_timeout_secs: 5,
+            concurrency_limit: 1,
         }
     }
 }

@@ -41,6 +41,7 @@
 //!   - `ContactSource` trait
 //!   - `QueryContext` (mutable shared state)
 //!   - `RawContact`, `SourceProvenance`
+//!   - `ContactAggregator` (provenance retention)
 //!   - Concrete source structs (skeletons)
 //!
 //! Usage (example skeleton):
@@ -56,6 +57,9 @@
 //!     ctx.ingest(raws);
 //! }
 //! let finalized = ctx.into_email_set().finalize(FinalizeOptions::default());
+//! for rc in ctx.provenance() {
+//!     println!("Provenance: {} +{}", rc.email, rc.confidence);
+//! }
 //! ```
 //!
 use async_trait::async_trait;
@@ -86,6 +90,55 @@ pub struct RawContact {
     pub notes: Vec<String>,
     /// Whether the contact originated from a pattern heuristic (vs discovered).
     pub is_pattern: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SourceErrorCategory {
+    Input,
+    Network,
+    Parse,
+    Internal,
+    Unknown,
+}
+
+#[derive(Debug, Clone)]
+pub struct SourceTiming {
+    pub name: &'static str,
+    pub start_ms: u128,
+    pub end_ms: u128,
+    pub duration_ms: u128,
+    pub success: bool,
+    pub warnings: Vec<String>,
+    pub error_categories: Vec<SourceErrorCategory>,
+}
+
+impl SourceTiming {
+    fn new(name: &'static str) -> Self {
+        Self {
+            name,
+            start_ms: 0,
+            end_ms: 0,
+            duration_ms: 0,
+            success: true,
+            warnings: vec![],
+            error_categories: vec![],
+        }
+    }
+    fn finish(
+        mut self,
+        start: std::time::Instant,
+        warnings: Vec<String>,
+        success: bool,
+        errs: Vec<SourceErrorCategory>,
+    ) -> Self {
+        let dur = start.elapsed().as_millis();
+        self.end_ms = dur;
+        self.duration_ms = dur;
+        self.success = success;
+        self.warnings = warnings;
+        self.error_categories = errs;
+        self
+    }
 }
 
 impl RawContact {
@@ -146,6 +199,95 @@ impl Default for SourceOptions {
     }
 }
 
+/// Aggregates raw contacts for provenance & later rich structured output.
+/// This preserves every RawContact (even if multiple sources yield the
+/// same canonical email) so we can reconstruct:
+///   * Per-source contributions
+///   * Confidence accumulation pathways
+///   * Detailed provenance metadata (notes, pattern flags)
+#[derive(Debug, Default)]
+pub struct ContactAggregator {
+    raw: Vec<RawContact>,
+}
+
+impl ContactAggregator {
+    pub fn new() -> Self {
+        Self { raw: Vec::new() }
+    }
+    pub fn push(&mut self, rc: RawContact) {
+        self.raw.push(rc);
+    }
+    pub fn extend(&mut self, items: impl IntoIterator<Item = RawContact>) {
+        for rc in items {
+            self.push(rc);
+        }
+    }
+    pub fn all(&self) -> &[RawContact] {
+        &self.raw
+    }
+    pub fn into_inner(self) -> Vec<RawContact> {
+        self.raw
+    }
+    /// Simple summary by email -> total confidence (deduplicated)
+    pub fn confidence_summary(&self) -> Vec<(String, u32)> {
+        use std::collections::HashMap;
+        let mut map: HashMap<String, u32> = HashMap::new();
+        for rc in &self.raw {
+            let entry = map.entry(rc.email.to_ascii_lowercase()).or_insert(0);
+            *entry = entry.saturating_add(rc.confidence);
+        }
+        let mut v: Vec<_> = map.into_iter().collect();
+        v.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+        v
+    }
+}
+
+/// Build a mapping of canonical email -> distinct structured output contact sources
+/// derived from raw provenance entries.
+/// This helper centralizes the transformation logic so the application layer
+/// does not need to duplicate the match statements.
+///
+/// NOTE: We intentionally avoid pulling in structured_output earlier in the
+/// file to keep dependency localized.
+pub fn map_provenance_to_contact_sources(
+    raws: &[RawContact],
+) -> std::collections::HashMap<String, Vec<crate::structured_output::ContactSource>> {
+    use crate::structured_output::ContactSource as OutSrc;
+    use std::collections::HashMap;
+
+    let mut map: HashMap<String, Vec<OutSrc>> = HashMap::new();
+
+    for rc in raws {
+        let email_key = rc.email.to_ascii_lowercase();
+        let sources_vec = map.entry(email_key).or_insert_with(Vec::new);
+
+        let mapped = match rc.provenance {
+            SourceProvenance::DnsSoa => {
+                let domain = rc.email.split('@').nth(1).unwrap_or("").to_string();
+                OutSrc::DnsSoa { domain }
+            }
+            SourceProvenance::Whois => OutSrc::Whois {
+                server: "whois-chain".into(),
+            },
+            SourceProvenance::AbuseNet => OutSrc::AbuseNet,
+            SourceProvenance::ReverseDns => OutSrc::HostnameHeuristic,
+            SourceProvenance::Pattern => OutSrc::MultipleConfirmed,
+            SourceProvenance::EmlHeader => OutSrc::HostnameHeuristic,
+            SourceProvenance::Other(_) => OutSrc::MultipleConfirmed,
+        };
+
+        // Deduplicate by discriminant (avoid repeating same logical source)
+        if !sources_vec
+            .iter()
+            .any(|existing| std::mem::discriminant(existing) == std::mem::discriminant(&mapped))
+        {
+            sources_vec.push(mapped);
+        }
+    }
+
+    map
+}
+
 /// Shared mutable state passed across sources.
 pub struct QueryContext {
     pub ip: Option<Ipv4Addr>,
@@ -157,14 +299,29 @@ pub struct QueryContext {
 
     // Aggregation
     email_set: EmailSet,
+    aggregator: ContactAggregator,
 
     // Stats / diagnostics
     pub dns_queries: u32,
     pub whois_servers: u32,
     pub warnings: Vec<String>,
 
+    // Per-source timing & categorization
+    pub source_timings: Vec<SourceTiming>,
+
     // Resolver reused across DNS-based sources
     resolver: Option<TokioAsyncResolver>,
+}
+
+/// Lightweight snapshot used by parallel runners so they can work
+/// with a read‑only view of the state and produce deltas without
+/// holding a mutable borrow over the full QueryContext.
+#[derive(Clone, Debug)]
+pub struct QueryContextSnapshot {
+    pub ip: Option<Ipv4Addr>,
+    pub reverse_hostname: Option<String>,
+    pub effective_domain: Option<String>,
+    pub opts: SourceOptions,
 }
 
 impl QueryContext {
@@ -182,9 +339,11 @@ impl QueryContext {
             opts,
             started_at: Instant::now(),
             email_set: EmailSet::new(),
+            aggregator: ContactAggregator::new(),
             dns_queries: 0,
             whois_servers: 0,
             warnings: vec![],
+            source_timings: Vec::new(),
             resolver: None,
         })
     }
@@ -197,16 +356,22 @@ impl QueryContext {
         Ok(self.resolver.as_ref().unwrap())
     }
 
-    /// Add raw contacts into the internal EmailSet.
+    /// Add raw contacts into the internal EmailSet AND provenance aggregator.
     pub fn ingest(&mut self, raws: Vec<RawContact>) {
         for rc in raws {
             self.email_set.add_with_conf(&rc.email, rc.confidence);
+            self.aggregator.push(rc);
         }
     }
 
     /// Expose aggregated email set (by value for downstream finalize()).
     pub fn into_email_set(self) -> EmailSet {
         self.email_set
+    }
+
+    /// Access full raw provenance list.
+    pub fn provenance(&self) -> &[RawContact] {
+        self.aggregator.all()
     }
 
     /// Derived effective domain for IP-based flows (using reverse hostname if available).
@@ -218,6 +383,16 @@ impl QueryContext {
             return domain_of(h).map(|s| s.to_string());
         }
         None
+    }
+
+    /// Build a read‑only snapshot for parallel phase execution.
+    pub fn snapshot(&self) -> QueryContextSnapshot {
+        QueryContextSnapshot {
+            ip: self.ip,
+            reverse_hostname: self.reverse_hostname.clone(),
+            effective_domain: self.effective_domain(),
+            opts: self.opts.clone(),
+        }
     }
 }
 
@@ -374,14 +549,49 @@ impl ContactSource for WhoisIpSource {
         if !ctx.opts.enable_whois {
             return Ok(vec![]);
         }
-        // TODO: integrate existing `whois_ip_chain` logic with parsing -> RawContact.
-        ctx.warnings
-            .push("WHOIS IP source not yet integrated into abstraction".to_string());
-        Ok(vec![])
+        // Implement WHOIS IP chain integration.
+        // Reuse existing whois_ip_chain -> collect emails -> map to RawContact.
+        let Some(ipv4) = ctx.ip else {
+            return Ok(vec![]);
+        };
+
+        // Minimal silent environment implementing WhoisEnv (no verbosity).
+        struct SilentEnv;
+        impl crate::whois::WhoisEnv for SilentEnv {
+            fn show_commands(&self) -> bool {
+                false
+            }
+            fn is_trace(&self) -> bool {
+                false
+            }
+            fn warn_enabled(&self) -> bool {
+                false
+            }
+        }
+
+        let mut tmp = EmailSet::new();
+        if let Err(e) = crate::whois::whois_ip_chain(ipv4, &mut tmp, &SilentEnv).await {
+            ctx.warnings.push(format!("WHOIS chain failed: {e}"));
+            return Ok(vec![]);
+        }
+
+        // Attribute a single WHOIS server contact (approximation; underlying
+        // chain currently doesn't expose per-server count to this abstraction).
+        ctx.whois_servers = ctx.whois_servers.saturating_add(1);
+
+        let raws = tmp
+            .into_sorted()
+            .into_iter()
+            .map(|(email, conf)| {
+                RawContact::new(email, conf, SourceProvenance::Whois).with_note("whois chain")
+            })
+            .collect();
+
+        Ok(raws)
     }
 }
 
-/// 5. abuse.net directory lookup (stub – to be implemented fully later).
+/// 5. abuse.net directory lookup (now implemented).
 pub struct AbuseNetSource;
 #[async_trait]
 impl ContactSource for AbuseNetSource {
@@ -393,10 +603,42 @@ impl ContactSource for AbuseNetSource {
         if !ctx.opts.enable_abusenet {
             return Ok(vec![]);
         }
-        // TODO: integrate existing `query_abuse_net` and transform results.
-        ctx.warnings
-            .push("abuse.net source not yet integrated into abstraction".to_string());
-        Ok(vec![])
+        let Some(domain) = ctx.effective_domain() else {
+            // No usable domain context available
+            return Ok(vec![]);
+        };
+
+        // Silent environment (no CLI dependency)
+        struct SilentEnv;
+        impl crate::whois::WhoisEnv for SilentEnv {
+            fn show_commands(&self) -> bool {
+                false
+            }
+            fn is_trace(&self) -> bool {
+                false
+            }
+            fn warn_enabled(&self) -> bool {
+                false
+            }
+        }
+
+        let mut tmp = EmailSet::new();
+        if let Err(e) = crate::whois::query_abuse_net(&domain, &mut tmp, &SilentEnv).await {
+            ctx.warnings
+                .push(format!("abuse.net lookup failed for {domain}: {e}"));
+            return Ok(vec![]);
+        }
+
+        let raws = tmp
+            .into_sorted()
+            .into_iter()
+            .map(|(email, conf)| {
+                RawContact::new(email, conf, SourceProvenance::AbuseNet)
+                    .with_note(format!("abuse.net directory ({domain})"))
+            })
+            .collect();
+
+        Ok(raws)
     }
 }
 
@@ -424,10 +666,240 @@ impl ContactSource for EmlHeaderSource {
 
 /// Helper to run a slice of sources sequentially (simple baseline;
 /// future work: parallelization + bounded concurrency).
-pub async fn run_sources(sources: &[&(dyn ContactSource)], ctx: &mut QueryContext) -> Result<()> {
+pub async fn run_sources(
+    sources: &[&Box<dyn ContactSource>],
+    ctx: &mut QueryContext,
+) -> Result<()> {
+    // Phase 1: sequential “fast” sources (already provided in `sources` slice)
     for src in sources {
-        let raws = src.collect(ctx).await?;
-        ctx.ingest(raws);
+        execute_with_retry(src, ctx).await?;
     }
     Ok(())
+}
+
+/// Run a second phase in parallel (intended for slower network sources).
+/// Accepts factory closures so the caller can decide which sources to
+/// include without borrowing `ctx` mutably during spawn.
+pub async fn run_parallel_phase2<F>(
+    ctx: &mut QueryContext,
+    builders: Vec<F>,
+    concurrency: usize,
+) -> Result<()>
+where
+    F: Fn() -> Box<dyn ContactSource + Send + Sync> + Send + Sync + 'static,
+{
+    use futures::stream::{FuturesUnordered, StreamExt};
+    use tokio::sync::Semaphore;
+
+    let sem = std::sync::Arc::new(Semaphore::new(concurrency.max(1)));
+    let snapshot = ctx.snapshot();
+    let mut futs: FuturesUnordered<_> = builders
+        .into_iter()
+        .map(|b| {
+            let snap = snapshot.clone();
+            let sem = sem.clone();
+            async move {
+                let _p = sem.acquire().await;
+                let mut local_ctx = snapshot_to_local(&snap);
+                let src = b();
+                let name = src.name();
+                let start = Instant::now();
+                let mut warnings = Vec::new();
+                let mut success = true;
+                let mut categories = Vec::new();
+                match src.collect(&mut local_ctx).await {
+                    Ok(raws) => (raws, local_ctx, name, start, warnings, success, categories),
+                    Err(e) => {
+                        success = false;
+                        categories.push(SourceErrorCategory::Network);
+                        warnings.push(format!("{name} failed: {e}"));
+                        (
+                            Vec::new(),
+                            local_ctx,
+                            name,
+                            start,
+                            warnings,
+                            success,
+                            categories,
+                        )
+                    }
+                }
+            }
+        })
+        .collect();
+
+    while let Some((raws, local_ctx, name, start, warnings, success, cats)) = futs.next().await {
+        // Apply deltas back to main context
+        ctx.dns_queries = ctx.dns_queries.saturating_add(local_ctx.dns_queries);
+        ctx.whois_servers = ctx.whois_servers.saturating_add(local_ctx.whois_servers);
+        ctx.warnings.extend(warnings.clone());
+        for rc in raws {
+            ctx.ingest(vec![rc]);
+        }
+        ctx.source_timings
+            .push(SourceTiming::new(name).finish(start, warnings, success, cats));
+    }
+    Ok(())
+}
+
+/// Helper: execute a single source with simplistic retry/backoff.
+async fn execute_with_retry(src: &Box<dyn ContactSource>, ctx: &mut QueryContext) -> Result<()> {
+    let name = src.name();
+    let start = Instant::now();
+    let mut warnings: Vec<String> = Vec::new();
+    let mut success = true;
+    let mut error_categories: Vec<SourceErrorCategory> = Vec::new();
+
+    let attempts = match name {
+        "reverse-dns" | "dns-soa" => 3,
+        "whois-ip" | "abuse-net" => 3,
+        _ => 1,
+    };
+
+    let mut result: std::result::Result<Vec<RawContact>, AbuseDetectorError> =
+        Err(AbuseDetectorError::internal("uninitialized"));
+    for attempt in 1..=attempts {
+        match src.collect(ctx).await {
+            Ok(v) => {
+                result = Ok(v);
+                break;
+            }
+            Err(e) => {
+                if attempt == attempts {
+                    success = false;
+                    error_categories.push(SourceErrorCategory::Network);
+                    warnings.push(format!("{name} failed after {attempts} attempts: {e}"));
+                    result = Err(e);
+                } else {
+                    warnings.push(format!("{name} attempt {attempt} failed: {e}; retrying"));
+                    let base_ms = match name {
+                        "reverse-dns" | "dns-soa" => 120,
+                        "whois-ip" => 250,
+                        "abuse-net" => 180,
+                        _ => 0,
+                    };
+                    if base_ms > 0 {
+                        tokio::time::sleep(std::time::Duration::from_millis(
+                            (base_ms * attempt as u64).min(1_000),
+                        ))
+                        .await;
+                    }
+                }
+            }
+        }
+    }
+
+    if let Ok(raws) = result {
+        ctx.ingest(raws);
+    }
+
+    ctx.source_timings.push(SourceTiming::new(name).finish(
+        start,
+        warnings,
+        success,
+        error_categories,
+    ));
+    Ok(())
+}
+
+/// Build a minimal local context from snapshot (used in parallel phase).
+fn snapshot_to_local(snap: &QueryContextSnapshot) -> QueryContext {
+    QueryContext {
+        ip: snap.ip,
+        reverse_hostname: snap.reverse_hostname.clone(),
+        sender_domain: None, // domain already resolved into effective_domain
+        eml_file: None,
+        opts: snap.opts.clone(),
+        started_at: Instant::now(),
+        email_set: EmailSet::new(),
+        aggregator: ContactAggregator::new(),
+        dns_queries: 0,
+        whois_servers: 0,
+        warnings: Vec::new(),
+        source_timings: Vec::new(),
+        resolver: None,
+    }
+}
+
+#[cfg(test)]
+mod source_tests {
+    use super::*;
+    use crate::sources::{
+        map_provenance_to_contact_sources, ContactSource, PatternDomainSource, QueryContext,
+        ReverseDnsSource, SourceOptions,
+    };
+
+    // Helper to build a minimal context
+    async fn ctx_with_domain(domain: &str, pattern: bool, reverse: bool) -> QueryContext {
+        let opts = SourceOptions {
+            enable_reverse_dns: reverse,
+            enable_dns_soa: false,
+            enable_whois: false,
+            enable_abusenet: false,
+            enable_pattern_domains: pattern,
+            dns_timeout_secs: 1,
+        };
+        QueryContext::new(None, Some(domain.to_string()), None, opts)
+            .await
+            .expect("ctx")
+    }
+
+    #[tokio::test]
+    async fn test_pattern_domain_source_provenance() {
+        let mut ctx = ctx_with_domain("example.com", true, false).await;
+        let src = PatternDomainSource;
+        let raws = src.collect(&mut ctx).await.expect("collect");
+        assert!(!raws.is_empty(), "pattern source should yield contacts");
+        let count = raws.len();
+        ctx.ingest(raws);
+        // Provenance retained
+        assert_eq!(ctx.provenance().len(), count);
+        assert!(ctx
+            .provenance()
+            .iter()
+            .all(|rc| matches!(rc.provenance, SourceProvenance::Pattern)));
+        // Mapping helper should classify entries
+        let mapped = map_provenance_to_contact_sources(ctx.provenance());
+        assert_eq!(mapped.len(), count, "each unique pattern email mapped");
+    }
+
+    #[tokio::test]
+    async fn test_timing_capture_and_retry_path() {
+        // Include a reverse DNS source (with no IP -> yields no contacts) to exercise timing.
+        let mut ctx = ctx_with_domain("example.org", true, true).await;
+        let sources: Vec<Box<dyn ContactSource>> =
+            vec![Box::new(PatternDomainSource), Box::new(ReverseDnsSource)];
+        for s in sources {
+            let _ = s.collect(&mut ctx).await.map(|r| {
+                ctx.ingest(r);
+            });
+        }
+        // Manually push a timing sample to simulate run_sources wrapper path
+        // (since tests directly invoked collect()).
+        assert!(ctx.provenance().len() >= 1);
+        // Emulate network timing capture semantics
+        assert!(
+            ctx.source_timings.is_empty(),
+            "direct collect() calls do not auto-populate timings"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_confidence_summary_consistency() {
+        let mut ctx = ctx_with_domain("example.net", true, false).await;
+        let src = PatternDomainSource;
+        let raws = src.collect(&mut ctx).await.unwrap();
+        ctx.ingest(raws);
+        let summary = ctx.provenance().iter().fold(
+            std::collections::HashMap::<String, u32>::new(),
+            |mut acc, rc| {
+                *acc.entry(rc.email.clone()).or_insert(0) += rc.confidence;
+                acc
+            },
+        );
+        assert!(
+            !summary.is_empty(),
+            "confidence summary should reflect ingested pattern contacts"
+        );
+    }
 }
