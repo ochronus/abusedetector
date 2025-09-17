@@ -11,8 +11,9 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::Ipv4Addr;
-use std::process::Command;
 use std::str;
+use tokio::time::{timeout, Duration};
+use whois_rust::{WhoIs, WhoIsLookupOptions};
 
 /// Represents different types of escalation contacts
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, schemars::JsonSchema)]
@@ -362,22 +363,7 @@ impl EscalationPath {
 
     /// Query WHOIS for IP information
     async fn query_whois_for_ip(&self) -> Result<String> {
-        let output = Command::new("whois")
-            .arg(self.ip.to_string())
-            .output()
-            .map_err(|e| {
-                anyhow::anyhow!(
-                    "Failed to execute whois command: {}. Please ensure whois is installed.",
-                    e
-                )
-            })?;
-
-        if output.status.success() {
-            Ok(String::from_utf8_lossy(&output.stdout).to_string())
-        } else {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            Err(anyhow::anyhow!("WHOIS query failed: {}", stderr))
-        }
+        Self::perform_whois_lookup(self.ip.to_string()).await
     }
 
     /// Parse WHOIS output to extract ASN information
@@ -564,19 +550,21 @@ impl EscalationPath {
 
     /// Query WHOIS for domain information
     async fn query_whois_for_domain(&self, domain: &str) -> Result<String> {
-        let output = Command::new("whois").arg(domain).output().map_err(|e| {
-            anyhow::anyhow!(
-                "Failed to execute whois command: {}. Please ensure whois is installed.",
-                e
-            )
-        })?;
+        Self::perform_whois_lookup(domain.to_string()).await
+    }
 
-        if output.status.success() {
-            Ok(String::from_utf8_lossy(&output.stdout).to_string())
-        } else {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            Err(anyhow::anyhow!("Domain WHOIS query failed: {}", stderr))
-        }
+    async fn perform_whois_lookup(query: String) -> Result<String> {
+        let query_label = query.clone();
+        let whois = WhoIs::from_string(include_str!("../data/whois-servers.json"))
+            .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+        let mut options = WhoIsLookupOptions::from_string(&query)
+            .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+        options.timeout = Some(Duration::from_secs(10));
+
+        timeout(Duration::from_secs(10), whois.lookup_async(options))
+            .await
+            .map_err(|_| anyhow::anyhow!("WHOIS lookup timed out for {query_label}"))?
+            .map_err(|e| anyhow::anyhow!(e.to_string()))
     }
 
     /// Parse registrar information from domain WHOIS

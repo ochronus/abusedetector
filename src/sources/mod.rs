@@ -669,10 +669,7 @@ impl ContactSource for EmlHeaderSource {
 
 /// Helper to run a slice of sources sequentially (simple baseline;
 /// future work: parallelization + bounded concurrency).
-pub async fn run_sources(
-    sources: &[&dyn ContactSource],
-    ctx: &mut QueryContext,
-) -> Result<()> {
+pub async fn run_sources(sources: &[&dyn ContactSource], ctx: &mut QueryContext) -> Result<()> {
     // Phase 1: sequential “fast” sources (already provided in `sources` slice)
     for src in sources {
         execute_with_retry(*src, ctx).await?;

@@ -135,7 +135,6 @@ impl App {
         } = Self::run_sources_pipeline(cli, ip, &sender_domain, &eml_file, from_eml).await?;
 
         let hostname = metadata.hostname.clone();
-        metadata.duration_ms = Some(start_time.elapsed().as_millis() as u64);
 
         let finalize_opts = FinalizeOptions {
             single_if_not_verbose: !cli.show_internal() && !cli.batch,
@@ -170,6 +169,8 @@ impl App {
         } else {
             None
         };
+
+        metadata.duration_ms = Some(start_time.elapsed().as_millis() as u64);
 
         if Self::maybe_render_structured(
             cli,
