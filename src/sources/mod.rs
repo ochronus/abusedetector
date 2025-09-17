@@ -184,6 +184,7 @@ pub struct SourceOptions {
     pub enable_abusenet: bool,
     pub enable_pattern_domains: bool,
     pub dns_timeout_secs: u64,
+    pub show_commands: bool,
 }
 
 impl Default for SourceOptions {
@@ -195,6 +196,7 @@ impl Default for SourceOptions {
             enable_abusenet: true,
             enable_pattern_domains: true,
             dns_timeout_secs: 5,
+            show_commands: false,
         }
     }
 }
@@ -259,7 +261,7 @@ pub fn map_provenance_to_contact_sources(
 
     for rc in raws {
         let email_key = rc.email.to_ascii_lowercase();
-        let sources_vec = map.entry(email_key).or_insert_with(Vec::new);
+        let sources_vec = map.entry(email_key).or_default();
 
         let mapped = match rc.provenance {
             SourceProvenance::DnsSoa => {
@@ -420,7 +422,8 @@ impl ContactSource for PatternDomainSource {
             return Ok(vec![]);
         }
         let mut out = Vec::new();
-        if let Some(ref dom) = ctx.sender_domain {
+        let domain_candidate = ctx.sender_domain.clone().or_else(|| ctx.effective_domain());
+        if let Some(ref dom) = domain_candidate {
             if let Ok(pats) = domain_utils::generate_abuse_emails(dom) {
                 for p in pats {
                     out.push(
@@ -453,7 +456,7 @@ impl ContactSource for ReverseDnsSource {
         if ctx.reverse_hostname.is_some() {
             return Ok(vec![]); // Already resolved
         }
-        match reverse_dns(IpAddr::V4(ipv4), false).await {
+        match reverse_dns(IpAddr::V4(ipv4), ctx.opts.show_commands).await {
             Ok(host_opt) => {
                 ctx.reverse_hostname = host_opt;
             }
@@ -667,12 +670,12 @@ impl ContactSource for EmlHeaderSource {
 /// Helper to run a slice of sources sequentially (simple baseline;
 /// future work: parallelization + bounded concurrency).
 pub async fn run_sources(
-    sources: &[&Box<dyn ContactSource>],
+    sources: &[&dyn ContactSource],
     ctx: &mut QueryContext,
 ) -> Result<()> {
     // Phase 1: sequential “fast” sources (already provided in `sources` slice)
     for src in sources {
-        execute_with_retry(src, ctx).await?;
+        execute_with_retry(*src, ctx).await?;
     }
     Ok(())
 }
@@ -743,7 +746,7 @@ where
 }
 
 /// Helper: execute a single source with simplistic retry/backoff.
-async fn execute_with_retry(src: &Box<dyn ContactSource>, ctx: &mut QueryContext) -> Result<()> {
+async fn execute_with_retry(src: &dyn ContactSource, ctx: &mut QueryContext) -> Result<()> {
     let name = src.name();
     let start = Instant::now();
     let mut warnings: Vec<String> = Vec::new();
@@ -838,6 +841,7 @@ mod source_tests {
             enable_abusenet: false,
             enable_pattern_domains: pattern,
             dns_timeout_secs: 1,
+            show_commands: false,
         };
         QueryContext::new(None, Some(domain.to_string()), None, opts)
             .await
@@ -876,7 +880,10 @@ mod source_tests {
         }
         // Manually push a timing sample to simulate run_sources wrapper path
         // (since tests directly invoked collect()).
-        assert!(ctx.provenance().len() >= 1);
+        assert!(
+            !ctx.provenance().is_empty(),
+            "pattern domain source should record provenance"
+        );
         // Emulate network timing capture semantics
         assert!(
             ctx.source_timings.is_empty(),

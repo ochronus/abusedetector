@@ -67,6 +67,7 @@ impl AbuseDetector {
             enable_abusenet: opts.use_abusenet,
             enable_pattern_domains: false,
             dns_timeout_secs: opts.dns_timeout_secs,
+            show_commands: opts.show_commands,
         };
         let mut ctx = QueryContext::new(Some(ip), None, None, source_opts).await?;
         // Assemble pipeline (order matters: hostname -> SOA -> WHOIS -> abuse.net)

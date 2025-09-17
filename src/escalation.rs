@@ -4,6 +4,7 @@
 //! escalation paths including hosting providers, domain registrars, ASN owners,
 //! regional internet registries, and cloud providers.
 
+use crate::domain_utils;
 use anyhow::Result;
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -505,6 +506,15 @@ impl EscalationPath {
         // Extract the registrable domain (handle subdomains)
         let registrable_domain = self.extract_registrable_domain(domain)?;
 
+        self.contacts.push(EscalationContact {
+            contact_type: EscalationContactType::DirectAbuse,
+            email: Some(format!("abuse@{}", registrable_domain)),
+            web_form: None,
+            organization: registrable_domain.clone(),
+            notes: vec!["Generated from registrable domain".to_string()],
+            response_expectation: Some("Response time varies".to_string()),
+        });
+
         // Check for special domain types
         if EDU_PATTERNS.is_match(domain) {
             self.contacts.push(EscalationContact {
@@ -612,19 +622,8 @@ impl EscalationPath {
 
     /// Extract registrable domain using public suffix list
     fn extract_registrable_domain(&self, domain: &str) -> Result<String> {
-        // Simple domain extraction - in a real implementation you'd use public suffix list
-        // For now, just extract the last two parts of the domain
-        let clean_domain = domain.trim_end_matches('.');
-        let parts: Vec<&str> = clean_domain.split('.').collect();
-        if parts.len() >= 2 {
-            Ok(format!(
-                "{}.{}",
-                parts[parts.len() - 2],
-                parts[parts.len() - 1]
-            ))
-        } else {
-            Ok(clean_domain.to_string())
-        }
+        domain_utils::extract_registrable_domain(domain)
+            .ok_or_else(|| anyhow::anyhow!("Unable to derive registrable domain for {domain}"))
     }
 
     /// Extract domain from organization name

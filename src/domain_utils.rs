@@ -7,6 +7,8 @@
 //! - subdomain.github.io -> subdomain.github.io (github.io is a public suffix)
 
 use anyhow::{anyhow, Result};
+use psl::{domain_str, suffix_str};
+use std::str;
 
 /// Domain information extracted using PSL or fallback parsing
 #[derive(Debug, Clone, PartialEq)]
@@ -27,231 +29,51 @@ impl DomainInfo {
     /// Parse a domain string into structured domain information
     pub fn parse(domain: &str) -> Result<Self> {
         let clean_domain = clean_domain_input(domain)?;
-
-        // Use enhanced parsing with common public suffixes
-        Ok(Self::parse_enhanced(&clean_domain))
+        Ok(Self::parse_with_psl(&clean_domain))
     }
 
-    /// Enhanced domain parsing with knowledge of common public suffixes
-    fn parse_enhanced(domain: &str) -> Self {
-        let parts: Vec<&str> = domain.split('.').collect();
+    fn parse_with_psl(domain: &str) -> Self {
+        let mut registrable_domain = domain_str(domain).map(|s| s.to_string());
+        let mut subdomain = registrable_domain
+            .as_ref()
+            .and_then(|reg| subdomain_for(domain, reg));
 
-        if parts.len() < 2 {
-            return DomainInfo {
-                full_domain: domain.to_string(),
-                registrable_domain: Some(domain.to_string()),
-                subdomain: None,
-                suffix: None,
-                is_public_suffix: false,
-            };
+        if registrable_domain.is_none() {
+            let (fallback_reg, fallback_sub) = fallback_registrable_domain(domain);
+            registrable_domain = fallback_reg;
+            subdomain = fallback_sub;
         }
 
-        // Common multi-part public suffixes
-        let multi_part_suffixes = [
-            "co.uk",
-            "org.uk",
-            "ac.uk",
-            "gov.uk",
-            "ltd.uk",
-            "me.uk",
-            "net.uk",
-            "nhs.uk",
-            "nic.uk",
-            "plc.uk",
-            "police.uk",
-            "sch.uk",
-            "com.au",
-            "net.au",
-            "org.au",
-            "edu.au",
-            "gov.au",
-            "asn.au",
-            "id.au",
-            "co.jp",
-            "ac.jp",
-            "ad.jp",
-            "co.jp",
-            "ed.jp",
-            "go.jp",
-            "gr.jp",
-            "lg.jp",
-            "ne.jp",
-            "or.jp",
-            "com.br",
-            "edu.br",
-            "gov.br",
-            "mil.br",
-            "net.br",
-            "org.br",
-            "co.za",
-            "edu.za",
-            "gov.za",
-            "law.za",
-            "mil.za",
-            "nom.za",
-            "org.za",
-            "co.nz",
-            "net.nz",
-            "org.nz",
-            "edu.nz",
-            "govt.nz",
-            "mil.nz",
-            "com.mx",
-            "edu.mx",
-            "gob.mx",
-            "net.mx",
-            "org.mx",
-            "co.in",
-            "net.in",
-            "org.in",
-            "edu.in",
-            "gov.in",
-            "mil.in",
-            "ac.in",
-        ];
-
-        // Special public suffixes (like github.io) where the subdomain is the registrable domain
-        let special_public_suffixes = [
-            "github.io",
-            "gitlab.io",
-            "bitbucket.io",
-            "herokuapp.com",
-            "netlify.app",
-            "vercel.app",
-            "web.app",
-            "firebaseapp.com",
-            "appspot.com",
-            "azurewebsites.net",
-            "cloudfront.net",
-            "s3.amazonaws.com",
-            "s3-website.amazonaws.com",
-        ];
-
-        let domain_lower = domain.to_lowercase();
-
-        // Check for special public suffixes
-        for special_suffix in &special_public_suffixes {
-            if domain_lower.ends_with(special_suffix) {
-                if domain_lower == *special_suffix {
-                    // This is the public suffix itself
-                    return DomainInfo {
-                        full_domain: domain.to_string(),
-                        registrable_domain: Some(domain.to_string()),
-                        subdomain: None,
-                        suffix: Some(special_suffix.to_string()),
-                        is_public_suffix: true,
-                    };
-                } else {
-                    // This has a subdomain on a special public suffix
-                    let _prefix = domain_lower
-                        .strip_suffix(&format!(".{}", special_suffix))
-                        .unwrap_or("");
-                    return DomainInfo {
-                        full_domain: domain.to_string(),
-                        registrable_domain: Some(domain.to_string()),
-                        subdomain: None, // For special suffixes, the whole thing is registrable
-                        suffix: Some(special_suffix.to_string()),
-                        is_public_suffix: false,
-                    };
-                }
-            }
+        let mut suffix = suffix_str(domain).map(|s| s.to_string());
+        if suffix.is_none() {
+            suffix = domain.split('.').skip(1).last().map(|s| s.to_string());
+        }
+        if suffix.as_ref().map(|s| s.is_empty()).unwrap_or(false) {
+            suffix = None;
         }
 
-        // Check for multi-part suffixes
-        if parts.len() >= 3 {
-            let last_two = format!("{}.{}", parts[parts.len() - 2], parts[parts.len() - 1]);
-
-            for suffix in &multi_part_suffixes {
-                if suffix.eq_ignore_ascii_case(&last_two) {
-                    if parts.len() == 3 {
-                        // example.co.uk
-                        return DomainInfo {
-                            full_domain: domain.to_string(),
-                            registrable_domain: Some(domain.to_string()),
-                            subdomain: None,
-                            suffix: Some(last_two),
-                            is_public_suffix: false,
-                        };
-                    } else if parts.len() == 4 {
-                        // sub.example.co.uk
-                        let reg_domain = format!("{}.{}", parts[parts.len() - 3], last_two);
-                        return DomainInfo {
-                            full_domain: domain.to_string(),
-                            registrable_domain: Some(reg_domain),
-                            subdomain: Some(parts[0].to_string()),
-                            suffix: Some(last_two),
-                            is_public_suffix: false,
-                        };
-                    } else {
-                        // a.b.c.example.co.uk -> example.co.uk is registrable
-                        let reg_domain = format!("{}.{}", parts[parts.len() - 3], last_two);
-                        let subdomain = if parts.len() > 3 {
-                            Some(parts[..parts.len() - 3].join("."))
-                        } else {
-                            None
-                        };
-                        return DomainInfo {
-                            full_domain: domain.to_string(),
-                            registrable_domain: Some(reg_domain),
-                            subdomain,
-                            suffix: Some(last_two),
-                            is_public_suffix: false,
-                        };
-                    }
-                }
-            }
-        }
-
-        // Default: treat as regular TLD
-        let suffix = parts.last().unwrap().to_string();
-        let (registrable_domain, subdomain) = if parts.len() == 2 {
-            (domain.to_string(), None)
-        } else {
-            let reg_domain = format!("{}.{}", parts[parts.len() - 2], parts[parts.len() - 1]);
-            let subdomain = if parts.len() > 2 {
-                Some(parts[..parts.len() - 2].join("."))
-            } else {
-                None
-            };
-            (reg_domain, subdomain)
-        };
+        let is_public_suffix =
+            registrable_domain.is_none() && suffix.as_ref().map(|s| s == domain).unwrap_or(false);
 
         DomainInfo {
             full_domain: domain.to_string(),
-            registrable_domain: Some(registrable_domain),
+            registrable_domain,
             subdomain,
-            suffix: Some(suffix),
-            is_public_suffix: false,
+            suffix,
+            is_public_suffix,
         }
     }
 
-    /// Get the best domain for WHOIS lookups (registrable domain if available)
-    #[allow(dead_code)]
-    pub fn whois_domain(&self) -> &str {
+    /// Get the best domain for abuse contact generation
+    pub fn abuse_domain(&self) -> &str {
         self.registrable_domain
             .as_deref()
             .unwrap_or(&self.full_domain)
     }
 
-    /// Get the best domain for abuse contact generation
-    #[allow(dead_code)]
-    pub fn abuse_domain(&self) -> &str {
-        // For most cases, use registrable domain
-        // But for some public suffixes like github.io, use the full domain
-        if let Some(ref reg_domain) = self.registrable_domain {
-            reg_domain
-        } else {
-            &self.full_domain
-        }
-    }
-
     /// Check if this is likely a hosting provider domain
-    #[allow(dead_code)]
     pub fn is_hosting_provider(&self) -> bool {
-        let domain = self.full_domain.to_lowercase();
-
-        // Common hosting provider patterns
-        let hosting_patterns = [
+        const HOSTING_PATTERNS: &[&str] = &[
             "amazonaws.com",
             "cloudfront.net",
             "azurewebsites.net",
@@ -270,44 +92,42 @@ impl DomainInfo {
             "edgecast.com",
         ];
 
-        hosting_patterns
+        let domain = self.full_domain.to_lowercase();
+        HOSTING_PATTERNS
             .iter()
             .any(|pattern| domain.ends_with(pattern))
     }
 
     /// Check if this is likely an educational domain
-    #[allow(dead_code)]
     pub fn is_educational(&self) -> bool {
-        if let Some(ref suffix) = self.suffix {
-            let suffix_lower = suffix.to_lowercase();
-            suffix_lower == "edu" || suffix_lower == "ac.uk" || suffix_lower.ends_with(".edu")
-        } else {
-            false
-        }
+        self.suffix
+            .as_deref()
+            .map(|suffix| {
+                let suffix_lower = suffix.to_lowercase();
+                suffix_lower == "edu" || suffix_lower == "ac.uk" || suffix_lower.ends_with(".edu")
+            })
+            .unwrap_or(false)
     }
 
     /// Check if this is likely a government domain
-    #[allow(dead_code)]
     pub fn is_government(&self) -> bool {
-        if let Some(ref suffix) = self.suffix {
-            let suffix_lower = suffix.to_lowercase();
-            suffix_lower == "gov"
-                || suffix_lower == "mil"
-                || suffix_lower == "gov.uk"
-                || suffix_lower.ends_with(".gov")
-                || suffix_lower.ends_with(".mil")
-        } else {
-            false
-        }
+        self.suffix
+            .as_deref()
+            .map(|suffix| {
+                let suffix_lower = suffix.to_lowercase();
+                suffix_lower == "gov"
+                    || suffix_lower == "mil"
+                    || suffix_lower == "gov.uk"
+                    || suffix_lower.ends_with(".gov")
+                    || suffix_lower.ends_with(".mil")
+            })
+            .unwrap_or(false)
     }
 }
 
 /// Extract registrable domain from a hostname or domain string
-pub fn extract_registrable_domain(domain: &str) -> Result<String> {
-    let domain_info = DomainInfo::parse(domain)?;
-    domain_info
-        .registrable_domain
-        .ok_or_else(|| anyhow!("No registrable domain found for: {}", domain))
+pub fn extract_registrable_domain(domain: &str) -> Option<String> {
+    DomainInfo::parse(domain).ok()?.registrable_domain
 }
 
 /// Extract the best domain for abuse contact purposes
@@ -358,6 +178,38 @@ fn clean_domain_input(domain: &str) -> Result<String> {
     }
 
     Ok(clean)
+}
+
+fn subdomain_for(full_domain: &str, registrable: &str) -> Option<String> {
+    if full_domain == registrable {
+        return None;
+    }
+    if full_domain.len() <= registrable.len() {
+        return None;
+    }
+    if !full_domain.ends_with(registrable) {
+        return None;
+    }
+    let prefix_len = full_domain.len() - registrable.len() - 1;
+    if prefix_len == 0 || prefix_len >= full_domain.len() {
+        None
+    } else {
+        Some(full_domain[..prefix_len].to_string())
+    }
+}
+
+fn fallback_registrable_domain(domain: &str) -> (Option<String>, Option<String>) {
+    let parts: Vec<&str> = domain.split('.').collect();
+    if parts.len() < 2 {
+        return (Some(domain.to_string()), None);
+    }
+    let registrable = format!("{}.{}", parts[parts.len() - 2], parts[parts.len() - 1]);
+    let subdomain = if parts.len() > 2 {
+        Some(parts[..parts.len() - 2].join("."))
+    } else {
+        None
+    };
+    (Some(registrable), subdomain)
 }
 
 /// Generate common abuse email patterns for a domain

@@ -142,7 +142,7 @@ pub async fn reverse_dns(ip: IpAddr, show_cmd: bool) -> Result<Option<String>> {
 
 /// Extract registrable domain from a hostname using Public Suffix List.
 pub fn domain_of(host: &str) -> Option<String> {
-    domain_utils::extract_registrable_domain(host).ok()
+    domain_utils::extract_registrable_domain(host)
 }
 
 #[cfg(test)]

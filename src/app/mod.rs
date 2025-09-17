@@ -49,7 +49,7 @@ use crate::output::{
 };
 use crate::sources::{
     map_provenance_to_contact_sources, AbuseNetSource, DnsSoaSource, PatternDomainSource,
-    QueryContext, ReverseDnsSource, SourceOptions, WhoisIpSource,
+    QueryContext, RawContact, ReverseDnsSource, SourceOptions, SourceProvenance, WhoisIpSource,
 };
 use crate::structured_output::{self, AbuseDetectorOutput};
 use crate::styled_output::StyledFormatter;
@@ -81,6 +81,7 @@ struct OrchestrationOutcome {
     metadata: QueryMetadata,
     provenance_lookup: HashMap<String, Vec<structured_output::ContactSource>>,
     source_timings: Option<Vec<crate::sources::SourceTiming>>,
+    fallback_added: bool,
 }
 
 /// Placeholder IP used when no public IPv4 could be extracted (domain fallback mode)
@@ -130,6 +131,7 @@ impl App {
             mut metadata,
             provenance_lookup,
             source_timings,
+            fallback_added,
         } = Self::run_sources_pipeline(cli, ip, &sender_domain, &eml_file, from_eml).await?;
 
         let hostname = metadata.hostname.clone();
@@ -140,6 +142,18 @@ impl App {
             ..Default::default()
         };
         let email_results = emails.finalize(finalize_opts);
+
+        if cli.is_trace() {
+            eprintln!(
+                "[trace] Finalized {} contact(s){}",
+                email_results.len(),
+                if fallback_added {
+                    " (includes fallback contact)"
+                } else {
+                    ""
+                }
+            );
+        }
 
         let dual_escalation = if cli.should_show_escalation() || email_results.is_empty() {
             match DualEscalationPath::from_eml_analysis(ip, hostname.clone(), sender_domain.clone())
@@ -467,6 +481,7 @@ impl App {
             enable_abusenet: !cli.no_use_abusenet,
             enable_pattern_domains: sender_domain.is_some(),
             dns_timeout_secs: 5,
+            show_commands: cli.show_commands,
         };
         let mut ctx = QueryContext::new(
             Some(ip),
@@ -485,6 +500,21 @@ impl App {
         }
         for s in phase1 {
             let _ = s.collect(&mut ctx).await.map(|r| ctx.ingest(r));
+        }
+        if sender_domain.is_none() {
+            if let Some(effective) = ctx.effective_domain() {
+                if let Ok(patterns) = domain_utils::generate_abuse_emails(&effective) {
+                    let raws = patterns
+                        .into_iter()
+                        .map(|email| {
+                            RawContact::new(email, 2, SourceProvenance::Pattern)
+                                .with_pattern()
+                                .with_note("pattern heuristic (reverse hostname)")
+                        })
+                        .collect();
+                    ctx.ingest(raws);
+                }
+            }
         }
         // Phase 2 parallel (DNS SOA, WHOIS, abuse.net)
         let mut builders: Vec<
@@ -515,9 +545,25 @@ impl App {
         let warnings = ctx.warnings.clone();
         let timings = ctx.source_timings.clone();
 
+        let collected = ctx.into_email_set().into_sorted();
         let mut emails = EmailSet::new();
-        for (email, conf) in ctx.into_email_set().into_sorted() {
-            emails.add_with_conf(email, conf);
+        let mut fallback_added = false;
+
+        if collected.is_empty() {
+            fallback_added = true;
+            if let Some(ref domain) = sender_domain
+                .clone()
+                .or_else(|| hostname.clone())
+                .and_then(|h| domain_utils::extract_registrable_domain(&h))
+            {
+                emails.add_with_conf(format!("abuse@{}", domain), 1);
+            } else {
+                emails.add_with_conf(format!("abuse@{}", ip), 1);
+            }
+        } else {
+            for (email, conf) in collected {
+                emails.add_with_conf(email, conf);
+            }
         }
         let metadata = QueryMetadata {
             from_eml,
@@ -537,9 +583,11 @@ impl App {
             } else {
                 Some(timings)
             },
+            fallback_added,
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn maybe_render_structured(
         cli: &Cli,
         ip: Ipv4Addr,
