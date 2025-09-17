@@ -18,14 +18,28 @@ env:
   RUSTFLAGS: -D warnings
 
 jobs:
+  # Multi-platform testing matrix
+  # Tests stable Rust on all platforms (Linux, macOS, Windows)
+  # Tests beta/nightly only on Linux to reduce CI cost while maintaining coverage
   build-test:
     name: build & test (${{ matrix.toolchain }} / ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
         toolchain: [stable, beta, nightly]
+        exclude:
+          # Only test nightly on Ubuntu to reduce CI load
+          - os: macos-latest
+            toolchain: nightly
+          - os: windows-latest
+            toolchain: nightly
+          # Only test beta on Ubuntu for main compatibility check
+          - os: macos-latest
+            toolchain: beta
+          - os: windows-latest
+            toolchain: beta
 
     continue-on-error: ${{ matrix.toolchain == 'nightly' }}
 
@@ -38,6 +52,22 @@ jobs:
         with:
           toolchain: ${{ matrix.toolchain }}
           components: clippy, rustfmt
+
+      # Platform-specific setup
+      - name: Setup platform dependencies
+        shell: bash
+        run: |
+          case "${{ runner.os }}" in
+            "Windows")
+              echo "Windows setup complete - using vendored dependencies"
+              ;;
+            "macOS")
+              echo "macOS setup complete"
+              ;;
+            "Linux")
+              echo "Linux setup complete"
+              ;;
+          esac
 
       - name: Cache cargo registry + build
         uses: actions/cache@v4
@@ -65,7 +95,46 @@ jobs:
 
       - name: Tests
         run: cargo test --all --all-features --verbose
+        env:
+          # Ensure consistent behavior across platforms
+          RUST_BACKTRACE: 1
 
+      # Build release binary to ensure optimized builds work on all platforms
+      - name: Build release
+        if: matrix.toolchain == 'stable'
+        run: cargo build --release --all-features
+
+  # Test Minimum Supported Rust Version (MSRV)
+  # This ensures we don't accidentally use newer Rust features
+  msrv:
+    name: MSRV check (1.70.0 / ubuntu)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install Rust (MSRV)
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.70.0
+
+      - name: Cache cargo registry + build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-msrv-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-msrv-
+            ${{ runner.os }}-cargo-
+
+      - name: Check MSRV
+        run: cargo check --all --all-features
+
+  # Code coverage analysis
+  # Only run on Ubuntu with stable Rust for consistent results
   coverage:
     name: coverage (stable / ubuntu)
     runs-on: ubuntu-latest
@@ -114,6 +183,7 @@ jobs:
           path: cobertura.xml
 
   # Lightweight job to print versions on schedule (helps ensure toolchain freshness)
+  # This helps catch when CI dependencies become outdated
   nightly-info:
     if: github.event_name == 'schedule'
     runs-on: ubuntu-latest

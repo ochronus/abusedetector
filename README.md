@@ -643,6 +643,22 @@ abusedetector --eml message.eml --yaml --show-escalation > report.yaml
 5. **Testing**: Verify against real-world samples (with privacy protection)
 6. **Open PR**: Include context, test cases, and edge case considerations
 
+### Cross-Platform Testing
+
+The project uses GitHub Actions CI with a comprehensive test matrix covering:
+
+- **Operating Systems**: Linux (Ubuntu), macOS, and Windows
+- **Rust Toolchains**: Stable (all platforms), Beta + Nightly (Linux only)
+- **MSRV Support**: Minimum Supported Rust Version (1.70.0) verification
+- **Features**: All tests run with `--all-features` for complete coverage
+
+**Platform-Specific Notes**:
+- Windows: Uses vendored OpenSSL and native-tls for HTTP client compatibility
+- macOS: Standard build with system dependencies
+- Linux: Full testing including coverage analysis and nightly toolchain
+
+All pull requests automatically trigger the full matrix, ensuring cross-platform compatibility before merge.
+
 ### Areas for Contribution
 
 - **Cloud provider IP ranges**: Keep detection current with provider updates
