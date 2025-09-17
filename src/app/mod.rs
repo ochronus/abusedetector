@@ -370,7 +370,9 @@ impl App {
             if cli.is_trace() {
                 eprintln!("Deriving originating IP from EML file: {eml_path}");
             }
-            let sender_domain = eml::extract_sender_domain_from_path(eml_path).unwrap_or(None);
+            let sender_domain = eml::extract_sender_domain_from_path(eml_path)
+                .ok()
+                .flatten();
             if let Some(ref d) = sender_domain {
                 if !cli.is_structured_output() {
                     println!("Detected sender domain (from EML): {d}");
@@ -380,6 +382,7 @@ impl App {
                 Ok(IpExtractionResult {
                     ip: std::net::IpAddr::V4(v4),
                     source,
+                    confidence: _,
                 }) => {
                     if cli.is_trace() {
                         eprintln!("Originating IP extracted from EML: {v4} (source: {source})");
@@ -394,7 +397,11 @@ impl App {
                         sender_domain,
                     }));
                 }
-                Ok(IpExtractionResult { ip: non_v4, source }) => {
+                Ok(IpExtractionResult {
+                    ip: non_v4,
+                    source,
+                    confidence: _,
+                }) => {
                     if cli.error_enabled() {
                         eprintln!(
                             "Error extracting IP: No public IPv4 found (extracted {non_v4}; source: {source})"

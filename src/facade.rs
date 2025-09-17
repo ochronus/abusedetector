@@ -164,7 +164,7 @@ impl AbuseDetector {
     pub async fn analyze_eml(path: &Path, opts: AnalysisOptions) -> Result<AbuseAnalysis> {
         let start = Instant::now();
         // (removed unused variable path_str)
-        let sender_domain = eml::extract_sender_domain_from_path(path).unwrap_or(None);
+        let sender_domain = eml::extract_sender_domain_from_path(path).ok().flatten();
 
         // Attempt IP extraction
         let ip_result = eml::parse_eml_origin_ip_from_path(path);
@@ -172,6 +172,7 @@ impl AbuseDetector {
             Ok(IpExtractionResult {
                 ip: IpAddr::V4(v4),
                 source: _,
+                confidence: _,
             }) if !is_private(IpAddr::V4(v4)) && !is_reserved(IpAddr::V4(v4)) => {
                 // Delegate to IP path but embed EML context
                 let mut analysis = Self::analyze_ip(v4, opts.clone()).await?;
