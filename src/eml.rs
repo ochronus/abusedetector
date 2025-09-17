@@ -708,8 +708,8 @@ Body here
         for i in 1..=12 {
             let filename = format!("corpus/sample{}.eml", i);
             if Path::new(&filename).exists() {
-                let content =
-                    fs::read_to_string(&filename).expect(&format!("Failed to read {}", filename));
+                let content = fs::read_to_string(&filename)
+                    .unwrap_or_else(|_| panic!("Failed to read {}", filename));
 
                 // Should either succeed or fail gracefully
                 match parse_eml_origin_ip(&content) {
