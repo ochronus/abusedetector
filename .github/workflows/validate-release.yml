@@ -3,7 +3,7 @@ name: Validate Release
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 env:
   CARGO_TERM_COLOR: always
@@ -127,8 +127,35 @@ jobs:
           ./target/release/abusedetector --help > help_output.txt
 
           # Basic validation that help contains expected sections
-          if ! grep -q "USAGE:" help_output.txt; then
-            echo "ERROR: Help output appears malformed"
+          if ! grep -qi "usage:" help_output.txt; then
+            echo "ERROR: Help output appears malformed - missing Usage section"
+            cat help_output.txt
+            exit 1
+          fi
+
+          # Check for Arguments section
+          if ! grep -qi "arguments:" help_output.txt; then
+            echo "ERROR: Help output appears malformed - missing Arguments section"
+            cat help_output.txt
+            exit 1
+          fi
+
+          # Check for Options section
+          if ! grep -qi "options:" help_output.txt; then
+            echo "ERROR: Help output appears malformed - missing Options section"
+            cat help_output.txt
+            exit 1
+          fi
+
+          # Check for key options
+          if ! grep -q "\-\-help" help_output.txt; then
+            echo "ERROR: Help output missing --help option"
+            cat help_output.txt
+            exit 1
+          fi
+
+          if ! grep -q "\-\-version" help_output.txt; then
+            echo "ERROR: Help output missing --version option"
             cat help_output.txt
             exit 1
           fi
