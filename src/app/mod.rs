@@ -272,30 +272,10 @@ impl App {
         }
 
         // Escalation listing (plain mode)
-        if let Some(paths) = dual
-            && cli.should_show_escalation()
-        {
-            println!("\n--- EMAIL INFRASTRUCTURE ESCALATION PATH ---");
-            for (i, c) in paths.get_email_infrastructure_contacts().iter().enumerate() {
-                println!(
-                    "{}. {} - {}",
-                    i + 1,
-                    c.contact_type.display_name(),
-                    c.organization
-                );
-                if let Some(ref email) = c.email {
-                    println!("   Email: {email}");
-                }
-                if let Some(ref form) = c.web_form {
-                    println!("   Web Form: {form}");
-                }
-                println!();
-            }
-            if let Some(hosting) = paths.get_sender_hosting_contacts()
-                && !hosting.is_empty()
-            {
-                println!("\n--- SENDER HOSTING ESCALATION PATH ---");
-                for (i, c) in hosting.iter().enumerate() {
+        if let Some(paths) = dual {
+            if cli.should_show_escalation() {
+                println!("\n--- EMAIL INFRASTRUCTURE ESCALATION PATH ---");
+                for (i, c) in paths.get_email_infrastructure_contacts().iter().enumerate() {
                     println!(
                         "{}. {} - {}",
                         i + 1,
@@ -309,6 +289,26 @@ impl App {
                         println!("   Web Form: {form}");
                     }
                     println!();
+                }
+                if let Some(hosting) = paths.get_sender_hosting_contacts() {
+                    if !hosting.is_empty() {
+                        println!("\n--- SENDER HOSTING ESCALATION PATH ---");
+                        for (i, c) in hosting.iter().enumerate() {
+                            println!(
+                                "{}. {} - {}",
+                                i + 1,
+                                c.contact_type.display_name(),
+                                c.organization
+                            );
+                            if let Some(ref email) = c.email {
+                                println!("   Email: {email}");
+                            }
+                            if let Some(ref form) = c.web_form {
+                                println!("   Web Form: {form}");
+                            }
+                            println!();
+                        }
+                    }
                 }
             }
         }
@@ -375,10 +375,10 @@ impl App {
             let sender_domain = eml::extract_sender_domain_from_path(eml_path)
                 .ok()
                 .flatten();
-            if let Some(ref d) = sender_domain
-                && !cli.is_structured_output()
-            {
-                println!("Detected sender domain (from EML): {d}");
+            if let Some(ref d) = sender_domain {
+                if !cli.is_structured_output() {
+                    println!("Detected sender domain (from EML): {d}");
+                }
             }
             match eml::parse_eml_origin_ip_from_path(eml_path) {
                 Ok(IpExtractionResult {
@@ -511,19 +511,20 @@ impl App {
         for s in phase1 {
             let _ = s.collect(&mut ctx).await.map(|r| ctx.ingest(r));
         }
-        if sender_domain.is_none()
-            && let Some(effective) = ctx.effective_domain()
-            && let Ok(patterns) = domain_utils::generate_abuse_emails(&effective)
-        {
-            let raws = patterns
-                .into_iter()
-                .map(|email| {
-                    RawContact::new(email, 2, SourceProvenance::Pattern)
-                        .with_pattern()
-                        .with_note("pattern heuristic (reverse hostname)")
-                })
-                .collect();
-            ctx.ingest(raws);
+        if sender_domain.is_none() {
+            if let Some(effective) = ctx.effective_domain() {
+                if let Ok(patterns) = domain_utils::generate_abuse_emails(&effective) {
+                    let raws = patterns
+                        .into_iter()
+                        .map(|email| {
+                            RawContact::new(email, 2, SourceProvenance::Pattern)
+                                .with_pattern()
+                                .with_note("pattern heuristic (reverse hostname)")
+                        })
+                        .collect();
+                    ctx.ingest(raws);
+                }
+            }
         }
         // Phase 2 parallel (DNS SOA, WHOIS, abuse.net)
         let mut builders: Vec<
@@ -761,10 +762,10 @@ impl App {
 
         if !cli.no_use_abusenet {
             metadata.abuse_net_queried = true;
-            if let Err(e) = query_abuse_net(domain, &mut emails, cli).await
-                && cli.warn_enabled()
-            {
-                eprintln!("Warning: abuse.net query failed for {domain}: {e}");
+            if let Err(e) = query_abuse_net(domain, &mut emails, cli).await {
+                if cli.warn_enabled() {
+                    eprintln!("Warning: abuse.net query failed for {domain}: {e}");
+                }
             }
         }
 
@@ -948,20 +949,20 @@ impl App {
                     );
                     println!();
                 }
-                if let Some(hosting) = dual.get_sender_hosting_contacts()
-                    && !hosting.is_empty()
-                {
-                    println!("\n  🏢 Sender Hosting:");
-                    for (i, c) in hosting.iter().enumerate() {
-                        let email = c.email.as_deref().unwrap_or("<unknown>");
-                        println!(
-                            "    {}. {} - {}",
-                            i + 1,
-                            email,
-                            c.contact_type.display_name()
-                        );
-                        if !c.organization.is_empty() {
-                            println!("       └─ Org: {}", c.organization);
+                if let Some(hosting) = dual.get_sender_hosting_contacts() {
+                    if !hosting.is_empty() {
+                        println!("\n  🏢 Sender Hosting:");
+                        for (i, c) in hosting.iter().enumerate() {
+                            let email = c.email.as_deref().unwrap_or("<unknown>");
+                            println!(
+                                "    {}. {} - {}",
+                                i + 1,
+                                email,
+                                c.contact_type.display_name()
+                            );
+                            if !c.organization.is_empty() {
+                                println!("       └─ Org: {}", c.organization);
+                            }
                         }
                     }
                 }

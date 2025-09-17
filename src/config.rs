@@ -221,22 +221,22 @@ impl Config {
         let mut config = Self::default();
 
         // Network timeouts
-        if let Ok(timeout) = std::env::var("ABUSEDETECTOR_DNS_TIMEOUT_SECS")
-            && let Ok(secs) = timeout.parse::<u64>()
-        {
-            config.network.dns_timeout = Duration::from_secs(secs);
+        if let Ok(timeout) = std::env::var("ABUSEDETECTOR_DNS_TIMEOUT_SECS") {
+            if let Ok(secs) = timeout.parse::<u64>() {
+                config.network.dns_timeout = Duration::from_secs(secs);
+            }
         }
 
-        if let Ok(timeout) = std::env::var("ABUSEDETECTOR_WHOIS_TIMEOUT_SECS")
-            && let Ok(secs) = timeout.parse::<u64>()
-        {
-            config.network.whois_timeout = Duration::from_secs(secs);
+        if let Ok(timeout) = std::env::var("ABUSEDETECTOR_WHOIS_TIMEOUT_SECS") {
+            if let Ok(secs) = timeout.parse::<u64>() {
+                config.network.whois_timeout = Duration::from_secs(secs);
+            }
         }
 
-        if let Ok(depth) = std::env::var("ABUSEDETECTOR_MAX_WHOIS_DEPTH")
-            && let Ok(d) = depth.parse::<usize>()
-        {
-            config.network.max_whois_depth = d;
+        if let Ok(depth) = std::env::var("ABUSEDETECTOR_MAX_WHOIS_DEPTH") {
+            if let Ok(d) = depth.parse::<usize>() {
+                config.network.max_whois_depth = d;
+            }
         }
 
         // Cache settings
@@ -251,10 +251,10 @@ impl Config {
         }
 
         // Output preferences
-        if let Ok(max_results) = std::env::var("ABUSEDETECTOR_MAX_RESULTS")
-            && let Ok(max) = max_results.parse::<usize>()
-        {
-            config.output.max_results = max;
+        if let Ok(max_results) = std::env::var("ABUSEDETECTOR_MAX_RESULTS") {
+            if let Ok(max) = max_results.parse::<usize>() {
+                config.output.max_results = max;
+            }
         }
 
         config
@@ -346,10 +346,10 @@ impl Config {
     pub fn should_exclude_email(&self, email: &str) -> bool {
         // In a real implementation, you'd compile these regexes once and reuse them
         for pattern in &self.output.exclude_patterns {
-            if let Ok(regex) = regex::Regex::new(pattern)
-                && regex.is_match(email)
-            {
-                return true;
+            if let Ok(regex) = regex::Regex::new(pattern) {
+                if regex.is_match(email) {
+                    return true;
+                }
             }
         }
         false

@@ -423,15 +423,15 @@ impl ContactSource for PatternDomainSource {
         }
         let mut out = Vec::new();
         let domain_candidate = ctx.sender_domain.clone().or_else(|| ctx.effective_domain());
-        if let Some(ref dom) = domain_candidate
-            && let Ok(pats) = domain_utils::generate_abuse_emails(dom)
-        {
-            for p in pats {
-                out.push(
-                    RawContact::new(p, 2, SourceProvenance::Pattern)
-                        .with_pattern()
-                        .with_note("pattern heuristic (reverse hostname)"),
-                );
+        if let Some(ref dom) = domain_candidate {
+            if let Ok(pats) = domain_utils::generate_abuse_emails(dom) {
+                for p in pats {
+                    out.push(
+                        RawContact::new(p, 2, SourceProvenance::Pattern)
+                            .with_pattern()
+                            .with_note("pattern heuristic"),
+                    );
+                }
             }
         }
         Ok(out)
@@ -492,10 +492,10 @@ impl ContactSource for DnsSoaSource {
         if let Some(h) = reverse_host_opt {
             candidates.push(h);
         }
-        if let Some(d) = sender_domain_opt
-            && !candidates.iter().any(|c| c == &d)
-        {
-            candidates.push(d);
+        if let Some(d) = sender_domain_opt {
+            if !candidates.iter().any(|c| c == &d) {
+                candidates.push(d);
+            }
         }
 
         let mut out = Vec::new();
@@ -519,16 +519,17 @@ impl ContactSource for DnsSoaSource {
                 )
                 .await;
 
-                if let Ok(Ok(answer)) = res
-                    && let Some(trust_dns_resolver::proto::rr::RData::SOA(soa)) =
+                if let Ok(Ok(answer)) = res {
+                    if let Some(trust_dns_resolver::proto::rr::RData::SOA(soa)) =
                         answer.iter().next()
-                {
-                    let rname = soa.rname().to_utf8();
-                    if let Some(email) = soa_rname_to_email(rname.trim_end_matches('.')) {
-                        out.push(
-                            RawContact::new(email, 1, SourceProvenance::DnsSoa)
-                                .with_note(format!("SOA rname from {query_name}")),
-                        );
+                    {
+                        let rname = soa.rname().to_utf8();
+                        if let Some(email) = soa_rname_to_email(rname.trim_end_matches('.')) {
+                            out.push(
+                                RawContact::new(email, 1, SourceProvenance::DnsSoa)
+                                    .with_note(format!("SOA rname from {query_name}")),
+                            );
+                        }
                     }
                 }
                 labels.remove(0);
