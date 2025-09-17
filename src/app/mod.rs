@@ -605,81 +605,73 @@ impl App {
         if !matches!(cli.output_format(), OutputFormat::Json | OutputFormat::Yaml) {
             return Ok(false);
         }
-        let mut out = AbuseDetectorOutput::new();
-        out.input.ip_address = ip;
-        out.input.hostname = hostname.clone();
-        out.input.sender_domain = sender_domain.clone();
-        out.input.eml_file = eml_file.clone();
-        out.input.input_method = if from_eml {
-            structured_output::InputMethod::EmlFile
-        } else {
-            structured_output::InputMethod::DirectIp
-        };
-        out.input.ip_source = if from_eml {
-            structured_output::IpSource::EmailHeader {
-                header_field: "Email-derived IPv4".to_string(),
-                priority: 1,
-            }
-        } else {
-            structured_output::IpSource::DirectInput
-        };
-        for (email, confidence) in email_results {
-            let domain = email.split('@').nth(1).map(|s| s.to_string());
-            let srcs = provenance_lookup
-                .get(&email.to_ascii_lowercase())
-                .cloned()
-                .unwrap_or_else(|| vec![structured_output::ContactSource::MultipleConfirmed]);
-            out.primary_contacts.push(structured_output::Contact {
-                email: email.clone(),
-                domain,
-                contact_type: if email.starts_with("abuse@") {
-                    structured_output::ContactType::Abuse
-                } else if email.starts_with("security@") {
-                    structured_output::ContactType::Security
-                } else if email.starts_with("hostmaster@") {
-                    structured_output::ContactType::Hostmaster
-                } else if email.starts_with("admin@") {
-                    structured_output::ContactType::Admin
-                } else if email.starts_with("tech@") {
-                    structured_output::ContactType::Tech
-                } else {
-                    structured_output::ContactType::Generic
-                },
-                sources: srcs,
-                confidence: *confidence as u8,
-                is_abuse_specific: email.starts_with("abuse@"),
-                metadata: None,
-            });
-        }
-        if let Some(d) = dual {
-            out.from_dual_escalation_path(d);
-            out.result.escalation_paths_generated = true;
-        }
-        out.result.primary_contacts_found = out.primary_contacts.len() as u32;
-        out.result.success = !out.primary_contacts.is_empty();
-        out.result.result_quality = if out.result.primary_contacts_found > 0 {
-            if out.result.escalation_paths_generated {
-                structured_output::ResultQuality::Excellent
+
+        let input_ctx = structured_output::StructuredInputContext {
+            ip_address: ip,
+            ip_source: if from_eml {
+                structured_output::IpSource::EmailHeader {
+                    header_field: "Email-derived IPv4".to_string(),
+                    priority: 1,
+                }
             } else {
-                structured_output::ResultQuality::Good
-            }
-        } else if out.result.escalation_paths_generated {
-            structured_output::ResultQuality::Fair
-        } else {
-            structured_output::ResultQuality::Poor
+                structured_output::IpSource::DirectInput
+            },
+            input_method: if from_eml {
+                structured_output::InputMethod::EmlFile
+            } else {
+                structured_output::InputMethod::DirectIp
+            },
+            hostname: hostname.clone(),
+            sender_domain: sender_domain.clone(),
+            eml_file: eml_file.clone(),
         };
-        out.result.overall_confidence = if out.result.primary_contacts_found > 0 {
-            (out.primary_contacts
+
+        let contacts: Vec<structured_output::Contact> = email_results
+            .iter()
+            .map(|(email, confidence)| {
+                let domain = email.split('@').nth(1).map(|s| s.to_string());
+                let sources = provenance_lookup
+                    .get(&email.to_ascii_lowercase())
+                    .cloned()
+                    .unwrap_or_else(|| vec![structured_output::ContactSource::MultipleConfirmed]);
+                structured_output::Contact {
+                    email: email.clone(),
+                    domain,
+                    contact_type: if email.starts_with("abuse@") {
+                        structured_output::ContactType::Abuse
+                    } else if email.starts_with("security@") {
+                        structured_output::ContactType::Security
+                    } else if email.starts_with("hostmaster@") {
+                        structured_output::ContactType::Hostmaster
+                    } else if email.starts_with("admin@") {
+                        structured_output::ContactType::Admin
+                    } else if email.starts_with("tech@") {
+                        structured_output::ContactType::Tech
+                    } else {
+                        structured_output::ContactType::Generic
+                    },
+                    sources,
+                    confidence: *confidence as u8,
+                    is_abuse_specific: email.starts_with("abuse@"),
+                    metadata: None,
+                }
+            })
+            .collect();
+
+        let mut stats_ctx = structured_output::StructuredStatsContext {
+            dns_queries: metadata.dns_queries,
+            whois_servers_queried: metadata.whois_servers_queried,
+            total_time_ms: metadata.duration_ms.unwrap_or(0),
+            confidence_summary: email_results
                 .iter()
-                .map(|c| c.confidence as u32)
-                .sum::<u32>()
-                / out.primary_contacts.len() as u32) as u8
-        } else {
-            0
+                .map(|(e, c)| structured_output::ConfidenceEntry {
+                    email: e.clone(),
+                    confidence: *c,
+                })
+                .collect(),
+            ..Default::default()
         };
-        out.statistics.dns_queries = metadata.dns_queries;
-        out.statistics.whois_servers_queried = metadata.whois_servers_queried;
-        out.statistics.total_time_ms = metadata.duration_ms.unwrap_or(0);
+
         if let Some(timings) = source_timings {
             let (mut dns_ms, mut whois_ms) = (0u64, 0u64);
             let (mut dns_total, mut dns_ok, mut whois_total, mut whois_ok) =
@@ -704,32 +696,31 @@ impl App {
                 }
             }
             if dns_total > 0 {
-                out.statistics.query_success_rates.dns_success_rate =
-                    dns_ok as f64 / dns_total as f64;
+                stats_ctx.dns_success_rate = Some(dns_ok as f64 / dns_total as f64);
             }
             if whois_total > 0 {
-                out.statistics.query_success_rates.whois_success_rate =
-                    whois_ok as f64 / whois_total as f64;
+                stats_ctx.whois_success_rate = Some(whois_ok as f64 / whois_total as f64);
             }
             let total_tasks = dns_total + whois_total;
             if total_tasks > 0 {
-                out.statistics.query_success_rates.overall_success_rate =
-                    (dns_ok + whois_ok) as f64 / total_tasks as f64;
+                stats_ctx.overall_success_rate =
+                    Some((dns_ok + whois_ok) as f64 / total_tasks as f64);
             }
-            out.statistics.time_breakdown.dns_time_ms = dns_ms;
-            out.statistics.time_breakdown.whois_time_ms = whois_ms;
+            stats_ctx.dns_time_ms = Some(dns_ms);
+            stats_ctx.whois_time_ms = Some(whois_ms);
         }
-        out.statistics.confidence_summary = email_results
-            .iter()
-            .map(|(e, c)| structured_output::ConfidenceEntry {
-                email: e.clone(),
-                confidence: *c,
-            })
-            .collect();
-        out.warnings = metadata.warnings.clone();
+
+        let output = structured_output::StructuredOutputBuilder::new()
+            .with_input(&input_ctx)
+            .with_contacts(&contacts)
+            .with_stats(&stats_ctx)
+            .with_warnings(&metadata.warnings)
+            .with_escalation(dual)
+            .finish();
+
         let rendered = match cli.output_format() {
-            OutputFormat::Json => out.to_json(),
-            OutputFormat::Yaml => out.to_yaml(),
+            OutputFormat::Json => output.to_json(),
+            OutputFormat::Yaml => output.to_yaml(),
             _ => unreachable!(),
         };
         match rendered {
@@ -829,22 +820,23 @@ impl App {
 
         match cli.output_format() {
             OutputFormat::Json | OutputFormat::Yaml => {
-                let mut out = AbuseDetectorOutput::new();
-                out.input.ip_address = FALLBACK_IP;
-                out.input.hostname = None;
-                out.input.sender_domain = sender_domain.clone();
-                out.input.eml_file = Some(eml_path.to_string());
-                out.input.input_method = structured_output::InputMethod::EmlFile;
-                out.input.ip_source = structured_output::IpSource::EmailHeader {
-                    header_field: "Domain fallback (no IPv4 found)".to_string(),
-                    priority: 0,
+                let input_ctx = structured_output::StructuredInputContext {
+                    ip_address: FALLBACK_IP,
+                    ip_source: structured_output::IpSource::EmailHeader {
+                        header_field: "Domain fallback (no IPv4 found)".to_string(),
+                        priority: 0,
+                    },
+                    input_method: structured_output::InputMethod::EmlFile,
+                    hostname: None,
+                    sender_domain: sender_domain.clone(),
+                    eml_file: Some(eml_path.to_string()),
                 };
 
-                for (email, confidence) in &finalized {
-                    let domain_part = email.split('@').nth(1).map(|s| s.to_string());
-                    out.primary_contacts.push(structured_output::Contact {
+                let contacts: Vec<structured_output::Contact> = finalized
+                    .iter()
+                    .map(|(email, confidence)| structured_output::Contact {
                         email: email.clone(),
-                        domain: domain_part,
+                        domain: email.split('@').nth(1).map(|s| s.to_string()),
                         contact_type: if email.starts_with("abuse@") {
                             structured_output::ContactType::Abuse
                         } else if email.starts_with("security@") {
@@ -856,51 +848,34 @@ impl App {
                         confidence: *confidence as u8,
                         is_abuse_specific: email.starts_with("abuse@"),
                         metadata: None,
-                    });
-                }
-
-                if let Some(ref d) = dual_escalation {
-                    out.from_dual_escalation_path(d);
-                    out.result.escalation_paths_generated = true;
-                }
-
-                out.result.primary_contacts_found = out.primary_contacts.len() as u32;
-                out.result.success = !out.primary_contacts.is_empty();
-                out.result.result_quality = if out.result.primary_contacts_found > 0 {
-                    if out.result.escalation_paths_generated {
-                        structured_output::ResultQuality::Excellent
-                    } else {
-                        structured_output::ResultQuality::Good
-                    }
-                } else if out.result.escalation_paths_generated {
-                    structured_output::ResultQuality::Fair
-                } else {
-                    structured_output::ResultQuality::Poor
-                };
-                out.result.overall_confidence = if out.result.primary_contacts_found > 0 {
-                    (out.primary_contacts
-                        .iter()
-                        .map(|c| c.confidence as u32)
-                        .sum::<u32>()
-                        / out.primary_contacts.len() as u32) as u8
-                } else {
-                    0
-                };
-                out.statistics.dns_queries = metadata.dns_queries;
-                out.statistics.whois_servers_queried = metadata.whois_servers_queried;
-                out.statistics.total_time_ms = metadata.duration_ms.unwrap_or(0);
-                out.statistics.confidence_summary = finalized
-                    .iter()
-                    .map(|(e, c)| structured_output::ConfidenceEntry {
-                        email: e.clone(),
-                        confidence: *c,
                     })
                     .collect();
-                out.warnings = metadata.warnings.clone();
+
+                let stats_ctx = structured_output::StructuredStatsContext {
+                    dns_queries: metadata.dns_queries,
+                    whois_servers_queried: metadata.whois_servers_queried,
+                    total_time_ms: metadata.duration_ms.unwrap_or(0),
+                    confidence_summary: finalized
+                        .iter()
+                        .map(|(e, c)| structured_output::ConfidenceEntry {
+                            email: e.clone(),
+                            confidence: *c,
+                        })
+                        .collect(),
+                    ..Default::default()
+                };
+
+                let output = structured_output::StructuredOutputBuilder::new()
+                    .with_input(&input_ctx)
+                    .with_contacts(&contacts)
+                    .with_stats(&stats_ctx)
+                    .with_warnings(&metadata.warnings)
+                    .with_escalation(dual_escalation.as_ref())
+                    .finish();
 
                 let rendered = match cli.output_format() {
-                    OutputFormat::Json => out.to_json(),
-                    OutputFormat::Yaml => out.to_yaml(),
+                    OutputFormat::Json => output.to_json(),
+                    OutputFormat::Yaml => output.to_yaml(),
                     _ => unreachable!(),
                 };
 

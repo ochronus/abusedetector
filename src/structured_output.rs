@@ -40,6 +40,138 @@ pub struct AbuseDetectorOutput {
     pub result: ResultSummary,
 }
 
+/// Aggregated context for populating `InputInfo` via the builder.
+#[derive(Debug, Clone)]
+pub struct StructuredInputContext {
+    pub ip_address: Ipv4Addr,
+    pub ip_source: IpSource,
+    pub input_method: InputMethod,
+    pub hostname: Option<String>,
+    pub sender_domain: Option<String>,
+    pub eml_file: Option<String>,
+}
+
+/// Aggregated statistics information consumed by the builder.
+#[derive(Debug, Clone, Default)]
+pub struct StructuredStatsContext {
+    pub dns_queries: u32,
+    pub whois_servers_queried: u32,
+    pub total_time_ms: u64,
+    pub dns_time_ms: Option<u64>,
+    pub whois_time_ms: Option<u64>,
+    pub dns_success_rate: Option<f64>,
+    pub whois_success_rate: Option<f64>,
+    pub overall_success_rate: Option<f64>,
+    pub confidence_summary: Vec<ConfidenceEntry>,
+}
+
+/// Fluent builder for assembling `AbuseDetectorOutput` instances.
+#[derive(Debug)]
+pub struct StructuredOutputBuilder {
+    output: AbuseDetectorOutput,
+}
+
+impl StructuredOutputBuilder {
+    pub fn new() -> Self {
+        Self {
+            output: AbuseDetectorOutput::new(),
+        }
+    }
+
+    pub fn with_input(mut self, ctx: &StructuredInputContext) -> Self {
+        self.output.input.ip_address = ctx.ip_address;
+        self.output.input.ip_source = ctx.ip_source.clone();
+        self.output.input.input_method = ctx.input_method.clone();
+        self.output.input.hostname = ctx.hostname.clone();
+        self.output.input.sender_domain = ctx.sender_domain.clone();
+        self.output.input.eml_file = ctx.eml_file.clone();
+        self
+    }
+
+    pub fn with_contacts(mut self, contacts: &[Contact]) -> Self {
+        self.output.primary_contacts = contacts.to_vec();
+        self
+    }
+
+    pub fn with_warnings(mut self, warnings: &[String]) -> Self {
+        self.output.warnings = warnings.to_vec();
+        self
+    }
+
+    pub fn with_escalation(mut self, escalation: Option<&DualEscalationPath>) -> Self {
+        if let Some(path) = escalation {
+            self.output.from_dual_escalation_path(path);
+        }
+        self
+    }
+
+    pub fn with_stats(mut self, stats: &StructuredStatsContext) -> Self {
+        self.output.statistics.dns_queries = stats.dns_queries;
+        self.output.statistics.whois_servers_queried = stats.whois_servers_queried;
+        self.output.statistics.total_time_ms = stats.total_time_ms;
+        if let Some(dns_ms) = stats.dns_time_ms {
+            self.output.statistics.time_breakdown.dns_time_ms = dns_ms;
+        }
+        if let Some(whois_ms) = stats.whois_time_ms {
+            self.output.statistics.time_breakdown.whois_time_ms = whois_ms;
+        }
+        if let Some(rate) = stats.dns_success_rate {
+            self.output.statistics.query_success_rates.dns_success_rate = rate;
+        }
+        if let Some(rate) = stats.whois_success_rate {
+            self.output
+                .statistics
+                .query_success_rates
+                .whois_success_rate = rate;
+        }
+        if let Some(rate) = stats.overall_success_rate {
+            self.output
+                .statistics
+                .query_success_rates
+                .overall_success_rate = rate;
+        }
+        self.output.statistics.confidence_summary = stats.confidence_summary.clone();
+        self
+    }
+
+    pub fn finish(mut self) -> AbuseDetectorOutput {
+        let contact_count = self.output.primary_contacts.len() as u32;
+        self.output.result.primary_contacts_found = contact_count;
+        self.output.result.success = contact_count > 0;
+        self.output.result.overall_confidence = if contact_count > 0 {
+            let sum: u32 = self
+                .output
+                .primary_contacts
+                .iter()
+                .map(|c| c.confidence as u32)
+                .sum();
+            (sum / contact_count).min(u32::from(u8::MAX)) as u8
+        } else {
+            0
+        };
+
+        self.output.result.result_quality = if contact_count > 0 {
+            if self.output.result.escalation_paths_generated {
+                ResultQuality::Excellent
+            } else {
+                ResultQuality::Good
+            }
+        } else if self.output.result.escalation_paths_generated {
+            ResultQuality::Fair
+        } else {
+            ResultQuality::Poor
+        };
+
+        self.output
+    }
+}
+
+impl Default for StructuredOutputBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Tool metadata and versioning information
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
