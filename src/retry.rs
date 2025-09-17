@@ -7,7 +7,7 @@
 #![allow(dead_code)]
 
 use std::time::Duration;
-use tokio::time::{sleep, Instant};
+use tokio::time::{Instant, sleep};
 
 /// Configuration for retry behavior
 #[derive(Debug, Clone)]
@@ -156,10 +156,10 @@ impl RetryExecutor {
 
         for attempt in 0..=self.config.max_attempts {
             // Check if we've exceeded the maximum total duration
-            if let Some(max_duration) = self.config.max_total_duration {
-                if start_time.elapsed() >= max_duration {
-                    break;
-                }
+            if let Some(max_duration) = self.config.max_total_duration
+                && start_time.elapsed() >= max_duration
+            {
+                break;
             }
 
             // Execute the operation

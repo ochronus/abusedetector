@@ -6,4 +6,7 @@ tarpaulin-report/
 target/tarpaulin/
 *.profraw
 
+# Release test artifacts
+target/release-test/
+
 .idea/

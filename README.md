@@ -670,6 +670,87 @@ All pull requests automatically trigger the full matrix, ensuring cross-platform
 
 ---
 
+## Releases
+
+### For Users: Installing Prebuilt Binaries
+
+Download the latest release from the [GitHub Releases page](https://github.com/your-org/abusedetector/releases). Choose the appropriate binary for your platform:
+
+- **Linux x86_64**: `abusedetector-linux-x86_64` (glibc) or `abusedetector-linux-x86_64-musl` (static)
+- **Linux ARM64**: `abusedetector-linux-aarch64`
+- **macOS x86_64**: `abusedetector-macos-x86_64` (Intel)
+- **macOS ARM64**: `abusedetector-macos-aarch64` (Apple Silicon)
+- **Windows x86_64**: `abusedetector-windows-x86_64.exe`
+
+**Installation:**
+```bash
+# Linux/macOS
+curl -L -o abusedetector https://github.com/your-org/abusedetector/releases/latest/download/abusedetector-linux-x86_64
+chmod +x abusedetector
+sudo mv abusedetector /usr/local/bin/
+
+# Windows (PowerShell)
+Invoke-WebRequest -Uri "https://github.com/your-org/abusedetector/releases/latest/download/abusedetector-windows-x86_64.exe" -OutFile "abusedetector.exe"
+```
+
+**Verify checksums** (recommended for security):
+```bash
+# Download checksum file and verify
+curl -L -o abusedetector.sha256 https://github.com/your-org/abusedetector/releases/latest/download/abusedetector-linux-x86_64.sha256
+shasum -c abusedetector.sha256
+```
+
+### For Maintainers: Creating Releases
+
+The project uses automated GitHub Actions workflows to build and publish releases for all supported platforms.
+
+**Release Process:**
+1. **Test locally** using the provided script:
+   ```bash
+   ./scripts/test-release.sh
+   ```
+
+2. **Update version** in `Cargo.toml` and commit changes
+
+3. **Create and push a git tag**:
+   ```bash
+   git tag v0.2.0
+   git push origin v0.2.0
+   ```
+
+4. **GitHub Actions automatically**:
+   - Builds binaries for all platforms (Linux, macOS, Windows)
+   - Generates SHA256 checksums for security verification
+   - Creates a GitHub release with all artifacts
+   - Uploads binaries and checksums as release assets
+
+**Supported Build Targets:**
+- `x86_64-unknown-linux-gnu` (Linux x86_64 with glibc)
+- `x86_64-unknown-linux-musl` (Linux x86_64 static binary)
+- `aarch64-unknown-linux-gnu` (Linux ARM64)
+- `x86_64-apple-darwin` (macOS Intel)
+- `aarch64-apple-darwin` (macOS Apple Silicon)
+- `x86_64-pc-windows-msvc` (Windows x86_64)
+
+**Manual Release Testing:**
+```bash
+# Test specific target
+./scripts/test-release.sh --target x86_64-unknown-linux-musl
+
+# Test multiple targets
+./scripts/test-release.sh --target x86_64-apple-darwin --target aarch64-apple-darwin
+
+# Skip tests for faster builds
+./scripts/test-release.sh --skip-tests
+
+# Clean build
+./scripts/test-release.sh --clean
+```
+
+The release workflow ensures consistent, reproducible builds across all platforms with proper security checksums.
+
+---
+
 ## Coverage
 
 The project includes automated coverage reporting using `cargo-tarpaulin`.  

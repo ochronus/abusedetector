@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::net::Ipv4Addr;
 use std::str;
-use tokio::time::{timeout, Duration};
+use tokio::time::{Duration, timeout};
 use whois_rust::{WhoIs, WhoIsLookupOptions};
 
 /// Represents different types of escalation contacts
@@ -219,7 +219,7 @@ impl EscalationPath {
                 web_form: cloud_info.abuse_form,
                 organization: cloud_info.provider,
                 notes: vec![
-                    "Cloud providers typically respond quickly to abuse reports".to_string()
+                    "Cloud providers typically respond quickly to abuse reports".to_string(),
                 ],
                 response_expectation: Some("Usually responds quickly".to_string()),
             });
@@ -260,19 +260,19 @@ impl EscalationPath {
         }
 
         // 4. Regional Internet Registry
-        if let Some(ref asn_info) = self.asn_info {
-            if let Some((name, email)) = RIR_INFO.get(asn_info.registry.as_str()) {
-                self.contacts.push(EscalationContact {
-                    contact_type: EscalationContactType::RegionalRegistry,
-                    email: Some(email.to_string()),
-                    web_form: None,
-                    organization: name.to_string(),
-                    notes: vec!["RIRs can pressure their members to respond".to_string()],
-                    response_expectation: Some(
-                        "May take longer due to bureaucratic process".to_string(),
-                    ),
-                });
-            }
+        if let Some(ref asn_info) = self.asn_info
+            && let Some((name, email)) = RIR_INFO.get(asn_info.registry.as_str())
+        {
+            self.contacts.push(EscalationContact {
+                contact_type: EscalationContactType::RegionalRegistry,
+                email: Some(email.to_string()),
+                web_form: None,
+                organization: name.to_string(),
+                notes: vec!["RIRs can pressure their members to respond".to_string()],
+                response_expectation: Some(
+                    "May take longer due to bureaucratic process".to_string(),
+                ),
+            });
         }
 
         // 5. Legal/regulatory (for specific domains)
@@ -315,10 +315,10 @@ impl EscalationPath {
     /// Lookup ASN information for the IP address
     async fn lookup_asn_info(&self) -> Option<AsnInfo> {
         // First try regular WHOIS parsing
-        if let Ok(whois_output) = self.query_whois_for_ip().await {
-            if let Some(asn_info) = self.parse_whois_for_asn(&whois_output) {
-                return Some(asn_info);
-            }
+        if let Ok(whois_output) = self.query_whois_for_ip().await
+            && let Some(asn_info) = self.parse_whois_for_asn(&whois_output)
+        {
+            return Some(asn_info);
         }
 
         // Fallback to Team Cymru ASN lookup
@@ -385,20 +385,20 @@ impl EscalationPath {
         for line in whois_text.lines() {
             let line = line.trim();
 
-            if let Some(cap) = asn_regex.captures(line) {
-                if let Ok(asn_num) = cap[1].parse::<u32>() {
-                    asn = Some(asn_num);
-                }
+            if let Some(cap) = asn_regex.captures(line)
+                && let Ok(asn_num) = cap[1].parse::<u32>()
+            {
+                asn = Some(asn_num);
             }
 
             // Prefer netname over generic name/org fields for hosting providers
             if let Some(cap) = netname_regex.captures(line) {
                 name = Some(cap[1].trim().to_string());
-            } else if let Some(cap) = name_regex.captures(line) {
-                if name.is_none() {
-                    // Take first occurrence only if netname wasn't found
-                    name = Some(cap[1].trim().to_string());
-                }
+            } else if let Some(cap) = name_regex.captures(line)
+                && name.is_none()
+            {
+                // Take first occurrence only if netname wasn't found
+                name = Some(cap[1].trim().to_string());
             }
 
             if let Some(cap) = country_regex.captures(line) {
@@ -420,12 +420,12 @@ impl EscalationPath {
         }
 
         // If no abuse contacts found, try to construct generic ones
-        if abuse_contacts.is_empty() {
-            if let Some(ref org_name) = name {
-                // Try common abuse email patterns
-                if let Some(domain) = self.extract_domain_from_org_name(org_name) {
-                    abuse_contacts.push(format!("abuse@{}", domain));
-                }
+        if abuse_contacts.is_empty()
+            && let Some(ref org_name) = name
+        {
+            // Try common abuse email patterns
+            if let Some(domain) = self.extract_domain_from_org_name(org_name) {
+                abuse_contacts.push(format!("abuse@{}", domain));
             }
         }
 
@@ -528,21 +528,18 @@ impl EscalationPath {
 
         // Look up real registrar information - skip hosting provider lookup from nameservers
         // as it's often inaccurate for domain whois
-        if let Ok(whois_output) = self.query_whois_for_domain(&registrable_domain).await {
-            if let Some((registrar_org, registrar_email)) = self.parse_registrar_info(&whois_output)
-            {
-                self.contacts.push(EscalationContact {
-                    contact_type: EscalationContactType::DomainRegistrar,
-                    email: registrar_email,
-                    web_form: None,
-                    organization: registrar_org,
+        if let Ok(whois_output) = self.query_whois_for_domain(&registrable_domain).await
+            && let Some((registrar_org, registrar_email)) = self.parse_registrar_info(&whois_output)
+        {
+            self.contacts.push(EscalationContact {
+                contact_type: EscalationContactType::DomainRegistrar,
+                email: registrar_email,
+                web_form: None,
+                organization: registrar_org,
 
-                    notes: vec!["Registrar can suspend domain if ToS violated".to_string()],
-                    response_expectation: Some(
-                        "Response time depends on registrar SLA".to_string(),
-                    ),
-                });
-            }
+                notes: vec!["Registrar can suspend domain if ToS violated".to_string()],
+                response_expectation: Some("Response time depends on registrar SLA".to_string()),
+            });
         }
 
         Ok(())
@@ -588,10 +585,10 @@ impl EscalationPath {
 
             if let Some(cap) = registrar_name_regex.captures(line) {
                 registrar_name = Some(cap[1].trim().to_string());
-            } else if let Some(cap) = registrar_regex.captures(line) {
-                if registrar_name.is_none() {
-                    registrar_name = Some(cap[1].trim().to_string());
-                }
+            } else if let Some(cap) = registrar_regex.captures(line)
+                && registrar_name.is_none()
+            {
+                registrar_name = Some(cap[1].trim().to_string());
             }
 
             if let Some(cap) = abuse_email_regex.captures(line) {
@@ -740,8 +737,8 @@ impl DualEscalationPath {
     /// Create escalation path for sender's domain hosting
     async fn create_sender_hosting_path(domain: &str) -> Result<EscalationPath> {
         use trust_dns_resolver::{
-            config::{ResolverConfig, ResolverOpts},
             TokioAsyncResolver,
+            config::{ResolverConfig, ResolverOpts},
         };
 
         let resolver =
@@ -832,10 +829,10 @@ impl DualEscalationPath {
         let response = resolver.lookup(domain_name, RecordType::A).await?;
 
         // Get the first A record IP
-        if let Some(record) = response.iter().next() {
-            if let Some(ip_addr) = record.as_a() {
-                return Ok(ip_addr.0);
-            }
+        if let Some(record) = response.iter().next()
+            && let Some(ip_addr) = record.as_a()
+        {
+            return Ok(ip_addr.0);
         }
 
         Err(anyhow::anyhow!("No A records found"))

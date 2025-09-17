@@ -17,13 +17,13 @@ use std::net::IpAddr;
 use std::str::FromStr;
 use std::time::Duration;
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use ipnetwork::IpNetwork;
 use lazy_static::lazy_static;
 use tokio::time::timeout;
 use trust_dns_resolver::{
-    config::{ResolverConfig, ResolverOpts},
     TokioAsyncResolver,
+    config::{ResolverConfig, ResolverOpts},
 };
 
 lazy_static! {

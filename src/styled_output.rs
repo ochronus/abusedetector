@@ -449,47 +449,47 @@ impl StyledFormatter {
         }
 
         // Sender Hosting Path (if available)
-        if let Some(ref hosting_path) = dual_paths.sender_hosting {
-            if !hosting_path.contacts.is_empty() {
-                writeln!(output)?;
+        if let Some(ref hosting_path) = dual_paths.sender_hosting
+            && !hosting_path.contacts.is_empty()
+        {
+            writeln!(output)?;
+            writeln!(
+                output,
+                "  {}",
+                self.styled("☁️ SENDER HOSTING ESCALATION PATH", &self.styles.subheader)
+            )?;
+            writeln!(
+                output,
+                "  {}",
+                self.styled("(For stopping website/business abuse)", &self.styles.muted)
+            )?;
+
+            if let Some(ref domain) = dual_paths.sender_domain {
                 writeln!(
                     output,
-                    "  {}",
-                    self.styled("☁️ SENDER HOSTING ESCALATION PATH", &self.styles.subheader)
+                    "  {} Based on sender domain: {}",
+                    self.styled("└─", &self.styles.muted),
+                    self.styled(domain, &self.styles.organization)
                 )?;
+            }
+            writeln!(output)?;
+
+            for (level_num, contact) in hosting_path.contacts.iter().enumerate() {
+                let icon = contact.contact_type.icon();
+                let type_name = contact.contact_type.display_name();
+
                 writeln!(
                     output,
-                    "  {}",
-                    self.styled("(For stopping website/business abuse)", &self.styles.muted)
+                    "    {} {} {}",
+                    self.styled(
+                        &format!("Level {}:", level_num),
+                        &self.styles.escalation_level
+                    ),
+                    icon,
+                    self.styled(type_name, &self.styles.bold)
                 )?;
 
-                if let Some(ref domain) = dual_paths.sender_domain {
-                    writeln!(
-                        output,
-                        "  {} Based on sender domain: {}",
-                        self.styled("└─", &self.styles.muted),
-                        self.styled(domain, &self.styles.organization)
-                    )?;
-                }
-                writeln!(output)?;
-
-                for (level_num, contact) in hosting_path.contacts.iter().enumerate() {
-                    let icon = contact.contact_type.icon();
-                    let type_name = contact.contact_type.display_name();
-
-                    writeln!(
-                        output,
-                        "    {} {} {}",
-                        self.styled(
-                            &format!("Level {}:", level_num),
-                            &self.styles.escalation_level
-                        ),
-                        icon,
-                        self.styled(type_name, &self.styles.bold)
-                    )?;
-
-                    self.write_contact_details_string(output, contact)?;
-                }
+                self.write_contact_details_string(output, contact)?;
             }
         }
 

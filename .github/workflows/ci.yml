@@ -91,7 +91,7 @@ jobs:
   # Test Minimum Supported Rust Version (MSRV)
   # This ensures we don't accidentally use newer Rust features
   msrv:
-    name: MSRV check (1.75.0 / ubuntu)
+    name: MSRV check (1.85.0 / ubuntu)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -100,7 +100,7 @@ jobs:
       - name: Install Rust (MSRV)
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: 1.75.0
+          toolchain: 1.85.0
 
       - name: Cache cargo registry + build
         uses: actions/cache@v4

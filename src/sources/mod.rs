@@ -68,13 +68,13 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use trust_dns_resolver::{
+    TokioAsyncResolver,
     config::{ResolverConfig, ResolverOpts},
     proto::rr::{Name, RecordType},
-    TokioAsyncResolver,
 };
 
 use crate::domain_utils;
-use crate::emails::{soa_rname_to_email, EmailSet};
+use crate::emails::{EmailSet, soa_rname_to_email};
 use crate::errors::{AbuseDetectorError, Result};
 use crate::netutil::{domain_of, reverse_dns};
 
@@ -423,15 +423,15 @@ impl ContactSource for PatternDomainSource {
         }
         let mut out = Vec::new();
         let domain_candidate = ctx.sender_domain.clone().or_else(|| ctx.effective_domain());
-        if let Some(ref dom) = domain_candidate {
-            if let Ok(pats) = domain_utils::generate_abuse_emails(dom) {
-                for p in pats {
-                    out.push(
-                        RawContact::new(p, 2, SourceProvenance::Pattern)
-                            .with_pattern()
-                            .with_note("pattern heuristic"),
-                    );
-                }
+        if let Some(ref dom) = domain_candidate
+            && let Ok(pats) = domain_utils::generate_abuse_emails(dom)
+        {
+            for p in pats {
+                out.push(
+                    RawContact::new(p, 2, SourceProvenance::Pattern)
+                        .with_pattern()
+                        .with_note("pattern heuristic (reverse hostname)"),
+                );
             }
         }
         Ok(out)
@@ -492,10 +492,10 @@ impl ContactSource for DnsSoaSource {
         if let Some(h) = reverse_host_opt {
             candidates.push(h);
         }
-        if let Some(d) = sender_domain_opt {
-            if !candidates.iter().any(|c| c == &d) {
-                candidates.push(d);
-            }
+        if let Some(d) = sender_domain_opt
+            && !candidates.iter().any(|c| c == &d)
+        {
+            candidates.push(d);
         }
 
         let mut out = Vec::new();
@@ -519,17 +519,16 @@ impl ContactSource for DnsSoaSource {
                 )
                 .await;
 
-                if let Ok(Ok(answer)) = res {
-                    if let Some(trust_dns_resolver::proto::rr::RData::SOA(soa)) =
+                if let Ok(Ok(answer)) = res
+                    && let Some(trust_dns_resolver::proto::rr::RData::SOA(soa)) =
                         answer.iter().next()
-                    {
-                        let rname = soa.rname().to_utf8();
-                        if let Some(email) = soa_rname_to_email(rname.trim_end_matches('.')) {
-                            out.push(
-                                RawContact::new(email, 1, SourceProvenance::DnsSoa)
-                                    .with_note(format!("SOA rname from {query_name}")),
-                            );
-                        }
+                {
+                    let rname = soa.rname().to_utf8();
+                    if let Some(email) = soa_rname_to_email(rname.trim_end_matches('.')) {
+                        out.push(
+                            RawContact::new(email, 1, SourceProvenance::DnsSoa)
+                                .with_note(format!("SOA rname from {query_name}")),
+                        );
                     }
                 }
                 labels.remove(0);
@@ -825,8 +824,8 @@ fn snapshot_to_local(snap: &QueryContextSnapshot) -> QueryContext {
 mod source_tests {
     use super::*;
     use crate::sources::{
-        map_provenance_to_contact_sources, ContactSource, PatternDomainSource, QueryContext,
-        ReverseDnsSource, SourceOptions,
+        ContactSource, PatternDomainSource, QueryContext, ReverseDnsSource, SourceOptions,
+        map_provenance_to_contact_sources,
     };
 
     // Helper to build a minimal context
@@ -855,10 +854,11 @@ mod source_tests {
         ctx.ingest(raws);
         // Provenance retained
         assert_eq!(ctx.provenance().len(), count);
-        assert!(ctx
-            .provenance()
-            .iter()
-            .all(|rc| matches!(rc.provenance, SourceProvenance::Pattern)));
+        assert!(
+            ctx.provenance()
+                .iter()
+                .all(|rc| matches!(rc.provenance, SourceProvenance::Pattern))
+        );
         // Mapping helper should classify entries
         let mapped = map_provenance_to_contact_sources(ctx.provenance());
         assert_eq!(mapped.len(), count, "each unique pattern email mapped");

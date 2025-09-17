@@ -1,14 +1,14 @@
 use std::net::Ipv4Addr;
 use std::time::Duration;
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use regex::Regex;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::time::timeout;
 
 use crate::cli::Cli;
-use crate::emails::{is_plausible_email, EmailSet};
+use crate::emails::{EmailSet, is_plausible_email};
 
 /// Abstraction over environment / verbosity for WHOIS & abuse.net lookups.
 /// This removes the direct dependency of core WHOIS functions on the concrete
@@ -206,10 +206,10 @@ pub async fn run_whois_phase(
     emails: &mut EmailSet,
     opts: &Cli,
 ) -> Result<()> {
-    if !opts.no_use_abusenet {
-        if let Some(dom) = hostname_domain {
-            query_abuse_net(dom, emails, opts).await?;
-        }
+    if !opts.no_use_abusenet
+        && let Some(dom) = hostname_domain
+    {
+        query_abuse_net(dom, emails, opts).await?;
     }
     if !opts.no_use_whois_ip {
         whois_ip_chain(ip, emails, opts).await?;
@@ -254,21 +254,21 @@ pub async fn query_cymru_asn<E: WhoisEnv + ?Sized>(ip: Ipv4Addr, env: &E) -> Res
         }
 
         let parts: Vec<&str> = line.split('|').map(|s| s.trim()).collect();
-        if parts.len() >= 7 {
-            if let Ok(asn) = parts[0].parse::<u32>() {
-                if env.is_trace() {
-                    eprintln!("  Cymru ASN => AS{} ({})", asn, parts[6]);
-                }
-
-                return Ok(CymruAsnInfo {
-                    asn,
-                    bgp_prefix: parts[2].to_string(),
-                    country: parts[3].to_string(),
-                    registry: parts[4].to_uppercase(),
-                    allocated: parts[5].to_string(),
-                    as_name: parts[6].to_string(),
-                });
+        if parts.len() >= 7
+            && let Ok(asn) = parts[0].parse::<u32>()
+        {
+            if env.is_trace() {
+                eprintln!("  Cymru ASN => AS{} ({})", asn, parts[6]);
             }
+
+            return Ok(CymruAsnInfo {
+                asn,
+                bgp_prefix: parts[2].to_string(),
+                country: parts[3].to_string(),
+                registry: parts[4].to_uppercase(),
+                allocated: parts[5].to_string(),
+                as_name: parts[6].to_string(),
+            });
         }
     }
 

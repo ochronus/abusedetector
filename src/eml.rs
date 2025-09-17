@@ -73,7 +73,7 @@ use std::fs;
 use std::net::IpAddr;
 use std::path::Path;
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{Result, anyhow, bail};
 use mail_parser::{HeaderValue, MessageParser};
 
 use crate::netutil::{is_private, is_reserved};
@@ -233,16 +233,14 @@ pub fn extract_sender_domain(content: &str) -> Result<Option<String>> {
         .parse(content.as_bytes())
         .ok_or_else(|| anyhow!("Failed to parse email message"))?;
 
-    if let Some(from_header) = message.from() {
-        if let Some(addr) = from_header.first() {
-            if let Some(email) = addr.address() {
-                if let Some(domain_start) = email.find('@') {
-                    let domain = &email[domain_start + 1..];
-                    if domain.contains('.') && !domain.is_empty() {
-                        return Ok(Some(domain.to_lowercase()));
-                    }
-                }
-            }
+    if let Some(from_header) = message.from()
+        && let Some(addr) = from_header.first()
+        && let Some(email) = addr.address()
+        && let Some(domain_start) = email.find('@')
+    {
+        let domain = &email[domain_start + 1..];
+        if domain.contains('.') && !domain.is_empty() {
+            return Ok(Some(domain.to_lowercase()));
         }
     }
 
@@ -323,60 +321,60 @@ pub fn parse_eml_origin_ip(content: &str) -> Result<IpExtractionResult> {
     let mut candidates: Vec<IpExtractionResult> = Vec::new();
 
     // 1. X-Mailgun-Sending-Ip (very high confidence)
-    if let Some(header) = message.header("X-Mailgun-Sending-Ip") {
-        if let Some(ip) = extract_ip_from_header_value(header, &is_public) {
-            candidates.push(IpExtractionResult {
-                ip: normalize_ipv6(ip),
-                source: HeaderSource::XMailgunSendingIp.description().to_string(),
-                confidence: HeaderSource::XMailgunSendingIp.confidence(),
-            });
-        }
+    if let Some(header) = message.header("X-Mailgun-Sending-Ip")
+        && let Some(ip) = extract_ip_from_header_value(header, &is_public)
+    {
+        candidates.push(IpExtractionResult {
+            ip: normalize_ipv6(ip),
+            source: HeaderSource::XMailgunSendingIp.description().to_string(),
+            confidence: HeaderSource::XMailgunSendingIp.confidence(),
+        });
     }
 
     // 2. X-Spam-source (medium confidence)
-    if let Some(header) = message.header("X-Spam-source") {
-        if let Some(ip) = extract_ip_from_spam_source(header, &is_public) {
-            candidates.push(IpExtractionResult {
-                ip: normalize_ipv6(ip),
-                source: HeaderSource::XSpamSource.description().to_string(),
-                confidence: HeaderSource::XSpamSource.confidence(),
-            });
-        }
+    if let Some(header) = message.header("X-Spam-source")
+        && let Some(ip) = extract_ip_from_spam_source(header, &is_public)
+    {
+        candidates.push(IpExtractionResult {
+            ip: normalize_ipv6(ip),
+            source: HeaderSource::XSpamSource.description().to_string(),
+            confidence: HeaderSource::XSpamSource.confidence(),
+        });
     }
 
     // 3. Authentication-Results (high confidence)
-    if let Some(header) = message.header("Authentication-Results") {
-        if let Some(ip) = extract_ip_from_auth_results(header, &is_public) {
-            candidates.push(IpExtractionResult {
-                ip: normalize_ipv6(ip),
-                source: HeaderSource::AuthenticationResults
-                    .description()
-                    .to_string(),
-                confidence: HeaderSource::AuthenticationResults.confidence(),
-            });
-        }
+    if let Some(header) = message.header("Authentication-Results")
+        && let Some(ip) = extract_ip_from_auth_results(header, &is_public)
+    {
+        candidates.push(IpExtractionResult {
+            ip: normalize_ipv6(ip),
+            source: HeaderSource::AuthenticationResults
+                .description()
+                .to_string(),
+            confidence: HeaderSource::AuthenticationResults.confidence(),
+        });
     }
 
     // 4. Received-SPF (high confidence)
-    if let Some(header) = message.header("Received-SPF") {
-        if let Some(ip) = extract_ip_from_received_spf(header, &is_public) {
-            candidates.push(IpExtractionResult {
-                ip: normalize_ipv6(ip),
-                source: HeaderSource::ReceivedSpf.description().to_string(),
-                confidence: HeaderSource::ReceivedSpf.confidence(),
-            });
-        }
+    if let Some(header) = message.header("Received-SPF")
+        && let Some(ip) = extract_ip_from_received_spf(header, &is_public)
+    {
+        candidates.push(IpExtractionResult {
+            ip: normalize_ipv6(ip),
+            source: HeaderSource::ReceivedSpf.description().to_string(),
+            confidence: HeaderSource::ReceivedSpf.confidence(),
+        });
     }
 
     // 5. X-Originating-IP (very high confidence)
-    if let Some(header) = message.header("X-Originating-IP") {
-        if let Some(ip) = extract_ip_from_header_value(header, &is_public) {
-            candidates.push(IpExtractionResult {
-                ip: normalize_ipv6(ip),
-                source: HeaderSource::XOriginatingIp.description().to_string(),
-                confidence: HeaderSource::XOriginatingIp.confidence(),
-            });
-        }
+    if let Some(header) = message.header("X-Originating-IP")
+        && let Some(ip) = extract_ip_from_header_value(header, &is_public)
+    {
+        candidates.push(IpExtractionResult {
+            ip: normalize_ipv6(ip),
+            source: HeaderSource::XOriginatingIp.description().to_string(),
+            confidence: HeaderSource::XOriginatingIp.confidence(),
+        });
     }
 
     // 6. Received headers (process in reverse order for canonical chain)
@@ -433,10 +431,10 @@ fn extract_ip_from_spam_source(
         let after_prefix = &header_text[start + 4..];
         if let Some(end) = after_prefix.find('\'') {
             let ip_str = &after_prefix[..end];
-            if let Ok(ip) = ip_str.parse::<IpAddr>() {
-                if is_public(ip) {
-                    return Some(ip);
-                }
+            if let Ok(ip) = ip_str.parse::<IpAddr>()
+                && is_public(ip)
+            {
+                return Some(ip);
             }
         }
     }
@@ -466,10 +464,10 @@ fn extract_ip_from_auth_results(
             .next()
             .unwrap_or("");
 
-        if let Ok(ip) = ip_part.parse::<IpAddr>() {
-            if is_public(ip) {
-                return Some(ip);
-            }
+        if let Ok(ip) = ip_part.parse::<IpAddr>()
+            && is_public(ip)
+        {
+            return Some(ip);
         }
     }
     None
@@ -498,10 +496,10 @@ fn extract_ip_from_received_spf(
             .next()
             .unwrap_or("");
 
-        if let Ok(ip) = ip_part.parse::<IpAddr>() {
-            if is_public(ip) {
-                return Some(ip);
-            }
+        if let Ok(ip) = ip_part.parse::<IpAddr>()
+            && is_public(ip)
+        {
+            return Some(ip);
         }
     }
     None

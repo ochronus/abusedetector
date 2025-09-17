@@ -6,7 +6,7 @@
 //! - subdomain.example.com -> example.com
 //! - subdomain.github.io -> subdomain.github.io (github.io is a public suffix)
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use psl::{domain_str, suffix_str};
 use std::str;
 

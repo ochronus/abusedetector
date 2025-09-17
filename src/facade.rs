@@ -3,14 +3,14 @@ use std::path::Path;
 use std::time::Instant;
 
 use trust_dns_resolver::{
+    TokioAsyncResolver,
     config::{ResolverConfig, ResolverOpts},
     proto::rr::{Name, RecordType},
-    TokioAsyncResolver,
 };
 
 use crate::analysis::{AbuseAnalysis, AnalysisOptions, AnalysisStats, ContactEntry};
 use crate::domain_utils;
-use crate::emails::{soa_rname_to_email, EmailSet, FinalizeOptions};
+use crate::emails::{EmailSet, FinalizeOptions, soa_rname_to_email};
 use crate::eml::{self, IpExtractionResult};
 use crate::errors::{AbuseDetectorError, Result};
 use crate::escalation::DualEscalationPath;

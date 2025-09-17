@@ -1,0 +1,146 @@
+name: Validate Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  validate-version:
+    name: Validate Version Consistency
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+
+      - name: Validate version consistency
+        run: |
+          # Extract version from git tag
+          TAG_VERSION=${GITHUB_REF#refs/tags/v}
+          echo "Tag version: $TAG_VERSION"
+
+          # Extract version from Cargo.toml
+          CARGO_VERSION=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+          echo "Cargo.toml version: $CARGO_VERSION"
+
+          # Compare versions
+          if [ "$TAG_VERSION" != "$CARGO_VERSION" ]; then
+            echo "ERROR: Version mismatch!"
+            echo "Git tag: v$TAG_VERSION"
+            echo "Cargo.toml: $CARGO_VERSION"
+            echo ""
+            echo "Please ensure the version in Cargo.toml matches the git tag."
+            echo "Expected: version = \"$TAG_VERSION\""
+            exit 1
+          fi
+
+          echo "✓ Version consistency validated: $TAG_VERSION"
+
+      - name: Validate changelog entry
+        run: |
+          TAG_VERSION=${GITHUB_REF#refs/tags/v}
+
+          # Check if CHANGELOG.md contains the version
+          if ! grep -q "## \[$TAG_VERSION\]" CHANGELOG.md; then
+            echo "WARNING: No changelog entry found for version $TAG_VERSION"
+            echo "Please add an entry to CHANGELOG.md with format:"
+            echo "## [$TAG_VERSION] - $(date +%Y-%m-%d)"
+            echo ""
+            echo "This is not a blocking error, but recommended for good release practices."
+          else
+            echo "✓ Changelog entry found for version $TAG_VERSION"
+          fi
+
+      - name: Check for breaking changes
+        run: |
+          TAG_VERSION=${GITHUB_REF#refs/tags/v}
+          MAJOR_VERSION=$(echo $TAG_VERSION | cut -d. -f1)
+
+          if [ "$MAJOR_VERSION" -gt "0" ]; then
+            echo "Major version release detected: $TAG_VERSION"
+            echo "Please ensure:"
+            echo "1. Breaking changes are documented in CHANGELOG.md"
+            echo "2. Migration guide is provided if needed"
+            echo "3. Deprecation warnings were present in previous releases"
+          fi
+
+      - name: Validate semantic versioning
+        run: |
+          TAG_VERSION=${GITHUB_REF#refs/tags/v}
+
+          # Check if version follows semantic versioning pattern
+          if ! echo "$TAG_VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9\-\.]+)?(\+[a-zA-Z0-9\-\.]+)?$'; then
+            echo "ERROR: Tag does not follow semantic versioning"
+            echo "Expected format: MAJOR.MINOR.PATCH[-prerelease][+build]"
+            echo "Examples: 1.0.0, 1.0.0-alpha.1, 1.0.0+build.1"
+            exit 1
+          fi
+
+          echo "✓ Version follows semantic versioning: $TAG_VERSION"
+
+  validate-build:
+    name: Validate Release Build
+    needs: validate-version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+
+      - name: Cache cargo registry + build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-validate-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-validate-
+            ${{ runner.os }}-cargo-
+
+      - name: Check that project builds
+        run: cargo check --release --locked
+
+      - name: Run tests
+        run: cargo test --all --all-features
+
+      - name: Check documentation
+        run: cargo doc --all --all-features --no-deps
+
+      - name: Validate that help text is up to date
+        run: |
+          # Build the binary and check help output
+          cargo build --release
+          ./target/release/abusedetector --help > help_output.txt
+
+          # Basic validation that help contains expected sections
+          if ! grep -q "USAGE:" help_output.txt; then
+            echo "ERROR: Help output appears malformed"
+            cat help_output.txt
+            exit 1
+          fi
+
+          echo "✓ Help output validates successfully"
+
+      - name: Check for TODO/FIXME in release
+        run: |
+          # Allow TODO/FIXME in tests and development files, but warn about them in main code
+          if grep -r "TODO\|FIXME" src/ --exclude-dir=tests --exclude="*.md" | grep -v "# TODO:" | head -5; then
+            echo "WARNING: Found TODO/FIXME items in source code"
+            echo "Consider addressing these before release"
+          else
+            echo "✓ No TODO/FIXME items found in main source code"
+          fi
