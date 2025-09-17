@@ -15,6 +15,9 @@ env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: -D warnings
 
+permissions:
+  contents: write
+
 jobs:
   # Validate the release before proceeding
   validate:
@@ -62,64 +65,13 @@ jobs:
           cargo check --release --locked
           cargo test --all --all-features
 
-  # Create the GitHub release
-  create-release:
-    name: Create GitHub Release
+  # Build binaries and create release
+  release:
+    name: Build Release Binaries
     needs: validate
-    runs-on: ubuntu-latest
-    outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
-      tag_name: ${{ steps.get_tag.outputs.tag_name }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Get tag name
-        id: get_tag
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "tag_name=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
-          else
-            echo "tag_name=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ steps.get_tag.outputs.tag_name }}
-          release_name: Release ${{ steps.get_tag.outputs.tag_name }}
-          draft: false
-          prerelease: ${{ contains(steps.get_tag.outputs.tag_name, '-') }}
-          body: |
-            ## Changes
-
-            See the [CHANGELOG](https://github.com/${{ github.repository }}/blob/${{ steps.get_tag.outputs.tag_name }}/CHANGELOG.md) for details.
-
-            ## Installation
-
-            Download the appropriate binary for your platform from the assets below.
-
-            ### Linux/macOS
-            ```bash
-            # Make executable and move to PATH
-            chmod +x abusedetector-*
-            sudo mv abusedetector-* /usr/local/bin/abusedetector
-            ```
-
-            ### Windows
-            ```powershell
-            # Add to PATH or run directly
-            .\abusedetector-windows-x86_64.exe --help
-            ```
-
-  # Build binaries for multiple platforms
-  build-release:
-    name: Build Release Binary
-    needs: create-release
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -163,6 +115,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+
+      - name: Get tag name
+        id: get_tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag_name=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag_name=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+        shell: bash
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
@@ -234,16 +196,6 @@ jobs:
           fi
         shell: bash
 
-      - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ./${{ matrix.asset_name }}
-          asset_name: ${{ matrix.asset_name }}
-          asset_content_type: application/octet-stream
-
       # Create checksums for security
       - name: Generate checksums
         run: |
@@ -254,85 +206,47 @@ jobs:
           fi
         shell: bash
 
-      - name: Upload checksum
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
         with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ./${{ matrix.asset_name }}.sha256
-          asset_name: ${{ matrix.asset_name }}.sha256
-          asset_content_type: text/plain
+          tag_name: ${{ steps.get_tag.outputs.tag_name }}
+          name: Release ${{ steps.get_tag.outputs.tag_name }}
+          draft: false
+          prerelease: ${{ contains(steps.get_tag.outputs.tag_name, '-') }}
+          files: |
+            ${{ matrix.asset_name }}
+            ${{ matrix.asset_name }}.sha256
+          body: |
+            ## Changes
 
-  # Update release with checksums summary
-  update-release:
-    name: Update Release Description
-    needs: [create-release, build-release]
-    runs-on: ubuntu-latest
-    if: always() && needs.create-release.result == 'success'
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
+            See the [CHANGELOG](https://github.com/${{ github.repository }}/blob/${{ steps.get_tag.outputs.tag_name }}/CHANGELOG.md) for details.
 
-      - name: Update release description
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const tag = '${{ needs.create-release.outputs.tag_name }}';
+            ## Installation
 
-            // Get the release
-            const releases = await github.rest.repos.listReleases({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-            });
+            Download the appropriate binary for your platform from the assets below.
 
-            const release = releases.data.find(r => r.tag_name === tag);
-            if (!release) {
-              core.setFailed('Release not found');
-              return;
-            }
+            ### Linux/macOS
+            ```bash
+            # Make executable and move to PATH
+            chmod +x abusedetector-*
+            sudo mv abusedetector-* /usr/local/bin/abusedetector
+            ```
 
-            // Get the assets
-            const assets = await github.rest.repos.listReleaseAssets({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              release_id: release.id,
-            });
+            ### Windows
+            ```powershell
+            # Add to PATH or run directly
+            .\abusedetector-windows-x86_64.exe --help
+            ```
 
-            // Build checksums section
-            const checksumAssets = assets.data.filter(asset => asset.name.endsWith('.sha256'));
-            let checksumSection = '';
+            ## Checksums
 
-            if (checksumAssets.length > 0) {
-              checksumSection = '\n\n## Checksums (SHA256)\n\n';
-              checksumSection += '```\n';
+            SHA256 checksums are provided for all binaries. Verify your download:
 
-              for (const asset of checksumAssets) {
-                const response = await github.rest.repos.getReleaseAsset({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  asset_id: asset.id,
-                  headers: {
-                    Accept: 'application/octet-stream'
-                  }
-                });
+            ```bash
+            # Linux/macOS
+            shasum -a 256 -c abusedetector-*.sha256
 
-                // The response.data contains the checksum file content
-                const checksum = Buffer.from(response.data).toString('utf8').trim();
-                checksumSection += checksum + '\n';
-              }
-
-              checksumSection += '```\n';
-            }
-
-            // Update the release body
-            const currentBody = release.body || '';
-            const newBody = currentBody + checksumSection;
-
-            await github.rest.repos.updateRelease({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              release_id: release.id,
-              body: newBody
-            });
+            # Windows
+            certutil -hashfile abusedetector-*.exe SHA256
+            ```
