@@ -1,6 +1,6 @@
 //! Shared analysis data structures consumed by façade and output formatters.
 
-use std::net::Ipv4Addr;
+use std::net::IpAddr;
 
 use crate::escalation::DualEscalationPath;
 
@@ -58,7 +58,7 @@ pub type DualEscalation = DualEscalationPath;
 /// Normalized result produced by the façade and consumed by formatters.
 #[derive(Debug)]
 pub struct AbuseAnalysis {
-    pub ip: Option<Ipv4Addr>,
+    pub ip: Option<IpAddr>,
     pub sender_domain: Option<Domain>,
     pub hostname: Option<String>,
     pub primary_contacts: Vec<ContactEntry>,

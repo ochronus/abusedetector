@@ -26,7 +26,7 @@
 //! vs warnings) to avoid surprising existing workflows.
 
 use std::collections::HashMap;
-use std::net::Ipv4Addr;
+use std::net::IpAddr;
 use std::time::Instant;
 
 use trust_dns_resolver::{
@@ -57,7 +57,7 @@ use crate::whois::query_abuse_net;
 
 /// Input resolution result (direct IP or EML-derived).
 struct InputResolution {
-    ip: Ipv4Addr,
+    ip: IpAddr,
     from_eml: bool,
     eml_file: Option<String>,
     sender_domain: Option<String>,
@@ -65,9 +65,9 @@ struct InputResolution {
 
 /// Result of attempting to interpret CLI input.
 enum ResolvedInput {
-    /// Direct IPv4 execution path.
+    /// Direct IP execution path (IPv4 or IPv6).
     Ip(InputResolution),
-    /// Domain fallback path when no public IPv4 can be derived from an EML file.
+    /// Domain fallback path when no public IP can be derived from an EML file.
     DomainFallback {
         domain: String,
         eml_path: String,
@@ -84,8 +84,8 @@ struct OrchestrationOutcome {
     fallback_added: bool,
 }
 
-/// Placeholder IP used when no public IPv4 could be extracted (domain fallback mode)
-const FALLBACK_IP: Ipv4Addr = Ipv4Addr::new(0, 0, 0, 0);
+/// Placeholder IP used when no public IP could be extracted (domain fallback mode)
+const FALLBACK_IP: IpAddr = IpAddr::V4(std::net::Ipv4Addr::new(0, 0, 0, 0));
 
 /// Application façade.
 pub struct App;
@@ -205,7 +205,7 @@ impl App {
 impl App {
     fn render_human(
         cli: &Cli,
-        ip: Ipv4Addr,
+        ip: IpAddr,
         _hostname: &Option<String>,
         email_results: &[(String, u32)],
         metadata: &QueryMetadata,
@@ -351,14 +351,14 @@ impl App {
         Ok(true)
     }
 
-    fn enforce_public_ip(cli: &Cli, ip: Ipv4Addr) -> Result<Option<i32>> {
-        if is_private(std::net::IpAddr::V4(ip)) {
+    fn enforce_public_ip(cli: &Cli, ip: IpAddr) -> Result<Option<i32>> {
+        if is_private(ip) {
             if cli.error_enabled() {
                 eprintln!("Error: {ip} is a private IP address (RFC1918). Cannot proceed.");
             }
             return Ok(Some(0));
         }
-        if is_reserved(std::net::IpAddr::V4(ip)) {
+        if is_reserved(ip) {
             if cli.error_enabled() {
                 eprintln!("Error: {ip} is a reserved IP address. Cannot proceed.");
             }
@@ -382,35 +382,35 @@ impl App {
             }
             match eml::parse_eml_origin_ip_from_path(eml_path) {
                 Ok(IpExtractionResult {
-                    ip: std::net::IpAddr::V4(v4),
+                    ip,
                     source,
                     confidence: _,
-                }) => {
+                }) if !is_private(ip) && !is_reserved(ip) => {
                     if cli.is_trace() {
-                        eprintln!("Originating IP extracted from EML: {v4} (source: {source})");
+                        eprintln!("Originating IP extracted from EML: {ip} (source: {source})");
                     }
                     if !cli.is_structured_output() {
-                        println!("Detected sender IP (from EML): {v4}");
+                        println!("Detected sender IP (from EML): {ip}");
                     }
                     return Ok(ResolvedInput::Ip(InputResolution {
-                        ip: v4,
+                        ip,
                         from_eml: true,
                         eml_file: Some(eml_path.clone()),
                         sender_domain,
                     }));
                 }
                 Ok(IpExtractionResult {
-                    ip: non_v4,
+                    ip: non_ip,
                     source,
                     confidence: _,
                 }) => {
                     if cli.error_enabled() {
                         eprintln!(
-                            "Error extracting IP: No public IPv4 found (extracted {non_v4}; source: {source})"
+                            "Error extracting IP: No public IP found (extracted {non_ip}; source: {source})"
                         );
                     } else if cli.warn_enabled() {
                         eprintln!(
-                            "Info: extracted non-IPv4 ({non_v4}; source: {source}); domain fallback"
+                            "Info: extracted non-IP ({non_ip}; source: {source}); domain fallback"
                         );
                     }
                     if let Some(domain) = sender_domain.clone() {
@@ -426,7 +426,7 @@ impl App {
                         });
                     }
                     return Err(AbuseDetectorError::Configuration {
-                        message: "No public IPv4 found and no sender domain available (EML path)"
+                        message: "No public IP found and no sender domain available (EML path)"
                             .into(),
                     });
                 }
@@ -434,7 +434,7 @@ impl App {
                     let msg = e.to_string();
                     if cli.error_enabled() {
                         if msg.to_ascii_lowercase().contains("no public ip") {
-                            eprintln!("Error extracting IP: No public IPv4 found in EML headers");
+                            eprintln!("Error extracting IP: No public IP found in EML headers");
                         } else {
                             eprintln!("Error extracting IP: {msg}");
                         }
@@ -454,16 +454,16 @@ impl App {
                         });
                     }
                     return Err(AbuseDetectorError::Configuration {
-                        message: "No public IPv4 found and no sender domain available (EML path)"
+                        message: "No public IP found and no sender domain available (EML path)"
                             .into(),
                     });
                 }
             }
         } else if let Some(ref ip_str) = cli.ip {
             let ip = ip_str
-                .parse::<Ipv4Addr>()
+                .parse::<IpAddr>()
                 .map_err(|_| AbuseDetectorError::Configuration {
-                    message: format!("Invalid IPv4 address format: {ip_str}"),
+                    message: format!("Invalid IP address format: {ip_str}"),
                 })?;
             return Ok(ResolvedInput::Ip(InputResolution {
                 ip,
@@ -479,7 +479,7 @@ impl App {
 
     async fn run_sources_pipeline(
         cli: &Cli,
-        ip: Ipv4Addr,
+        ip: IpAddr,
         sender_domain: &Option<String>,
         eml_file: &Option<String>,
         from_eml: bool,
@@ -600,7 +600,7 @@ impl App {
     #[allow(clippy::too_many_arguments)]
     fn maybe_render_structured(
         cli: &Cli,
-        ip: Ipv4Addr,
+        ip: IpAddr,
         hostname: &Option<String>,
         sender_domain: &Option<String>,
         eml_file: &Option<String>,

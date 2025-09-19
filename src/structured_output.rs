@@ -8,7 +8,7 @@
 use anyhow::Result;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::net::Ipv4Addr;
+use std::net::IpAddr;
 
 use crate::escalation::{DualEscalationPath, EscalationContact, EscalationContactType};
 
@@ -43,7 +43,7 @@ pub struct AbuseDetectorOutput {
 /// Aggregated context for populating `InputInfo` via the builder.
 #[derive(Debug, Clone)]
 pub struct StructuredInputContext {
-    pub ip_address: Ipv4Addr,
+    pub ip_address: IpAddr,
     pub ip_source: IpSource,
     pub input_method: InputMethod,
     pub hostname: Option<String>,
@@ -196,8 +196,8 @@ pub struct OutputMetadata {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct InputInfo {
-    /// The IP address that was analyzed (may be 0.0.0.0 in domain-fallback mode when no public IPv4 was found in EML headers)
-    pub ip_address: Ipv4Addr,
+    /// The IP address that was analyzed (may be 0.0.0.0 in domain-fallback mode when no public IP was found in EML headers)
+    pub ip_address: IpAddr,
 
     /// How the IP was obtained
     pub ip_source: IpSource,
@@ -618,7 +618,7 @@ impl AbuseDetectorOutput {
                 schema_url: "https://raw.githubusercontent.com/ochronus/abusedetector/main/schema/output.json".to_string(),
             },
             input: InputInfo {
-                ip_address: std::net::Ipv4Addr::new(0, 0, 0, 0),
+                ip_address: std::net::IpAddr::V4(std::net::Ipv4Addr::new(0, 0, 0, 0)),
                 ip_source: IpSource::DirectInput,
                 input_method: InputMethod::DirectIp,
                 hostname: None,

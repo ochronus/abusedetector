@@ -10,7 +10,7 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::net::Ipv4Addr;
+use std::net::IpAddr;
 use std::str;
 use tokio::time::{Duration, timeout};
 use whois_rust::{WhoIs, WhoIsLookupOptions};
@@ -30,6 +30,7 @@ pub enum EscalationContactType {
     RegionalRegistry,
     /// Cloud provider (AWS, Azure, GCP, etc.)
     CloudProvider,
+
     /// Parent organization (university, corporation)
     ParentOrganization,
     /// Legal/regulatory authority
@@ -50,7 +51,7 @@ pub struct EscalationContact {
 /// Complete escalation path for an IP/domain
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EscalationPath {
-    pub ip: Ipv4Addr,
+    pub ip: IpAddr,
     pub domain: Option<String>,
     pub contacts: Vec<EscalationContact>,
     pub asn_info: Option<AsnInfo>,
@@ -103,7 +104,7 @@ static CLOUD_PROVIDERS: Lazy<HashMap<&'static str, CloudProviderInfo>> = Lazy::n
         },
     );
 
-    // Google Cloud
+    // GCP
     map.insert(
         "gcp",
         CloudProviderInfo {
@@ -115,7 +116,7 @@ static CLOUD_PROVIDERS: Lazy<HashMap<&'static str, CloudProviderInfo>> = Lazy::n
         },
     );
 
-    // Microsoft Azure
+    // Azure
     map.insert(
         "azure",
         CloudProviderInfo {
@@ -150,6 +151,112 @@ static CLOUD_PROVIDERS: Lazy<HashMap<&'static str, CloudProviderInfo>> = Lazy::n
             region: None,
         },
     );
+
+    // Vercel
+    map.insert(
+        "vercel",
+        CloudProviderInfo {
+            provider: "Vercel".to_string(),
+            service: None,
+            abuse_form: None,
+            abuse_email: Some("abuse@vercel.com".to_string()),
+            region: None,
+        },
+    );
+
+    map
+});
+
+/// Hosting provider configurations
+static HOSTING_PROVIDERS: Lazy<HashMap<&'static str, CloudProviderInfo>> = Lazy::new(|| {
+    let mut map = HashMap::new();
+
+    // Vercel
+    map.insert(
+        "vercel",
+        CloudProviderInfo {
+            provider: "Vercel".to_string(),
+            service: None,
+            abuse_form: None,
+            abuse_email: Some("abuse@vercel.com".to_string()),
+            region: None,
+        },
+    );
+
+    // Netlify
+    map.insert(
+        "netlify",
+        CloudProviderInfo {
+            provider: "Netlify".to_string(),
+            service: None,
+            abuse_form: None,
+            abuse_email: Some("abuse@netlify.com".to_string()),
+            region: None,
+        },
+    );
+
+    // Heroku
+    map.insert(
+        "heroku",
+        CloudProviderInfo {
+            provider: "Heroku".to_string(),
+            service: None,
+            abuse_form: None,
+            abuse_email: Some("abuse@heroku.com".to_string()),
+            region: None,
+        },
+    );
+
+    map
+});
+
+/// ASN to cloud provider mapping for major cloud providers
+static ASN_CLOUD_MAPPING: Lazy<HashMap<u32, &'static str>> = Lazy::new(|| {
+    let mut map = HashMap::new();
+
+    // Amazon/AWS ASNs
+    map.insert(16509, "aws"); // AMAZON-02
+    map.insert(14618, "aws"); // AMAZON-AES
+    map.insert(8987, "aws"); // AMAZON
+
+    // Google Cloud ASNs
+    map.insert(15169, "gcp"); // GOOGLE
+    map.insert(396982, "gcp"); // GOOGLE-CLOUD-PLATFORM
+
+    // Microsoft Azure ASNs
+    map.insert(8075, "azure"); // MICROSOFT-CORP-MSN-AS-BLOCK
+    map.insert(3598, "azure"); // MICROSOFT-CORP-MSN-AS-BLOCK
+
+    // DigitalOcean ASNs
+    map.insert(14061, "digitalocean"); // DIGITALOCEAN-ASN
+
+    // Cloudflare ASNs
+    map.insert(13335, "cloudflare"); // CLOUDFLARENET
+    map.insert(209242, "cloudflare"); // CLOUDFLARE-EU
+
+    map
+});
+
+/// ASN to organization domain mapping for generating abuse emails
+static ASN_DOMAIN_MAPPING: Lazy<HashMap<u32, &'static str>> = Lazy::new(|| {
+    let mut map = HashMap::new();
+
+    // Major cloud providers
+    map.insert(16509, "amazonaws.com"); // Amazon AWS
+    map.insert(14618, "amazonaws.com"); // Amazon AWS
+    map.insert(8987, "amazon.com"); // Amazon
+    map.insert(15169, "google.com"); // Google
+    map.insert(396982, "google.com"); // Google Cloud
+    map.insert(8075, "microsoft.com"); // Microsoft
+    map.insert(3598, "microsoft.com"); // Microsoft
+    map.insert(14061, "digitalocean.com"); // DigitalOcean
+    map.insert(13335, "cloudflare.com"); // Cloudflare
+    map.insert(209242, "cloudflare.com"); // Cloudflare EU
+
+    // Other major hosting providers
+    map.insert(51167, "contabo.com"); // Contabo
+    map.insert(14340, "salesforce.com"); // Salesforce
+    map.insert(396479, "mailgun.com"); // Mailgun
 
     map
 });
@@ -190,11 +297,7 @@ static GOV_PATTERNS: Lazy<Regex> =
 
 impl EscalationPath {
     /// Create a new escalation path for the given IP and optional domain
-    pub async fn new(
-        ip: Ipv4Addr,
-        domain: Option<String>,
-        hostname: Option<String>,
-    ) -> Result<Self> {
+    pub async fn new(ip: IpAddr, domain: Option<String>, hostname: Option<String>) -> Result<Self> {
         let mut path = EscalationPath {
             ip,
             domain: domain.clone(),
@@ -210,7 +313,44 @@ impl EscalationPath {
 
     /// Build the complete escalation contact list
     async fn build_escalation_contacts(&mut self, hostname: Option<String>) -> Result<()> {
-        // 1. Cloud provider detection (often most effective)
+        // 1. ASN owner lookup (do this first to get ASN info for cloud provider detection)
+        if let Some(asn_info) = self.lookup_asn_info().await {
+            self.asn_info = Some(asn_info.clone());
+
+            // Add ASN owner contact if we have abuse contacts or can generate one
+            let mut asn_abuse_emails = asn_info.abuse_contacts.clone();
+            if asn_abuse_emails.is_empty() {
+                // Try to generate abuse email from ASN domain mapping
+                if let Some(domain) = ASN_DOMAIN_MAPPING.get(&asn_info.asn) {
+                    asn_abuse_emails.push(format!("abuse@{}", domain));
+                }
+            }
+
+            for abuse_email in &asn_abuse_emails {
+                self.contacts.push(EscalationContact {
+                    contact_type: EscalationContactType::AsnOwner,
+                    email: Some(abuse_email.clone()),
+                    web_form: None,
+                    organization: format!("AS{} - {}", asn_info.asn, asn_info.name),
+                    notes: vec!["ASN owner controls the IP address space".to_string()],
+                    response_expectation: Some("Standard business response time".to_string()),
+                });
+            }
+        }
+
+        // 2. Hosting provider detection (from WHOIS org data)
+        if let Some(hosting_info) = self.detect_hosting_provider().await {
+            self.contacts.push(EscalationContact {
+                contact_type: EscalationContactType::HostingProvider,
+                email: hosting_info.abuse_email,
+                web_form: hosting_info.abuse_form,
+                organization: hosting_info.provider,
+                notes: vec!["Hosting provider manages the service/platform".to_string()],
+                response_expectation: Some("Usually responds quickly".to_string()),
+            });
+        }
+
+        // 3. Cloud provider detection (can now use ASN info)
         if let Some(cloud_info) = self.detect_cloud_provider().await {
             self.cloud_provider = Some(cloud_info.clone());
             self.contacts.push(EscalationContact {
@@ -223,21 +363,6 @@ impl EscalationPath {
                 ],
                 response_expectation: Some("Usually responds quickly".to_string()),
             });
-        }
-
-        // 2. ASN owner lookup
-        if let Some(asn_info) = self.lookup_asn_info().await {
-            self.asn_info = Some(asn_info.clone());
-            for abuse_email in &asn_info.abuse_contacts {
-                self.contacts.push(EscalationContact {
-                    contact_type: EscalationContactType::AsnOwner,
-                    email: Some(abuse_email.clone()),
-                    web_form: None,
-                    organization: format!("AS{} - {}", asn_info.asn, asn_info.name),
-                    notes: vec!["ASN owner controls the IP address space".to_string()],
-                    response_expectation: Some("Standard business response time".to_string()),
-                });
-            }
         }
 
         // 3. Domain-based escalation (if domain provided or can be extracted from hostname)
@@ -281,17 +406,17 @@ impl EscalationPath {
         Ok(())
     }
 
-    /// Detect cloud provider based on IP address
+    /// Detect cloud provider based on ASN information and reverse DNS patterns
     async fn detect_cloud_provider(&self) -> Option<CloudProviderInfo> {
-        // This is a simplified implementation. In practice, you'd want to:
-        // 1. Maintain updated IP range databases for major cloud providers
-        // 2. Use APIs where available (AWS has a JSON endpoint for their ranges)
-        // 3. Check reverse DNS patterns
+        // First, try ASN-based detection (most reliable)
+        if let Some(ref asn_info) = self.asn_info {
+            if let Some(provider_key) = ASN_CLOUD_MAPPING.get(&asn_info.asn) {
+                return CLOUD_PROVIDERS.get(provider_key).cloned();
+            }
+        }
 
-        // For now, we'll do basic reverse DNS pattern matching
-        if let Ok(Some(hostname)) =
-            crate::netutil::reverse_dns(std::net::IpAddr::V4(self.ip), false).await
-        {
+        // Fall back to reverse DNS pattern matching
+        if let Ok(Some(hostname)) = crate::netutil::reverse_dns(self.ip, false).await {
             let hostname_lower = hostname.to_lowercase();
 
             if hostname_lower.contains("amazonaws.com") || hostname_lower.contains("aws") {
@@ -306,6 +431,27 @@ impl EscalationPath {
                 return CLOUD_PROVIDERS.get("digitalocean").cloned();
             } else if hostname_lower.contains("cloudflare") {
                 return CLOUD_PROVIDERS.get("cloudflare").cloned();
+            } else if hostname_lower.contains("vercel") {
+                return CLOUD_PROVIDERS.get("vercel").cloned();
+            }
+        }
+
+        None
+    }
+
+    /// Detect hosting provider from WHOIS organization data
+    async fn detect_hosting_provider(&self) -> Option<CloudProviderInfo> {
+        // Try to get WHOIS data for this IP
+        if let Ok(whois_output) = self.query_whois_for_ip().await {
+            let whois_lower = whois_output.to_lowercase();
+
+            // Check for hosting provider organizations in WHOIS
+            if whois_lower.contains("vercel") {
+                return HOSTING_PROVIDERS.get("vercel").cloned();
+            } else if whois_lower.contains("netlify") {
+                return HOSTING_PROVIDERS.get("netlify").cloned();
+            } else if whois_lower.contains("heroku") {
+                return HOSTING_PROVIDERS.get("heroku").cloned();
             }
         }
 
@@ -369,7 +515,7 @@ impl EscalationPath {
     /// Parse WHOIS output to extract ASN information
     fn parse_whois_for_asn(&self, whois_text: &str) -> Option<AsnInfo> {
         let mut asn = None;
-        let mut name = None;
+        let mut name: Option<String> = None;
         let mut country = None;
         let mut registry = None;
         let mut abuse_contacts = Vec::new();
@@ -391,12 +537,19 @@ impl EscalationPath {
                 }
             }
 
-            // Prefer netname over generic name/org fields for hosting providers
-            if let Some(cap) = netname_regex.captures(line) {
-                name = Some(cap[1].trim().to_string());
-            } else if let Some(cap) = name_regex.captures(line) {
+            // Prefer descriptive organization/description fields over cryptic netnames
+            if let Some(cap) = name_regex.captures(line) {
+                let org_name = cap[1].trim().to_string();
+                // Always prefer organization fields, even if we already have a netname
+                if name.is_none()
+                    || (name.is_some()
+                        && Self::is_better_org_name(&org_name, name.as_ref().unwrap()))
+                {
+                    name = Some(org_name);
+                }
+            } else if let Some(cap) = netname_regex.captures(line) {
+                // Only use netname if no organization name found yet
                 if name.is_none() {
-                    // Take first occurrence only if netname wasn't found
                     name = Some(cap[1].trim().to_string());
                 }
             }
@@ -442,48 +595,86 @@ impl EscalationPath {
         }
     }
 
+    /// Determine if a new organization name is better than the current one
+    /// Prefers descriptive names over cryptic codes/dates
+    fn is_better_org_name(new_name: &str, current_name: &str) -> bool {
+        // If current name looks like a cryptic code (all caps, contains dates, etc), prefer new name
+        let current_is_cryptic = current_name.chars().all(|c| c.is_uppercase() || c.is_ascii_digit() || c == '-' || c == '_')
+            || current_name.contains("20") // likely contains a date
+            || current_name.len() < 5; // very short names are often codes
+
+        let new_is_descriptive = new_name.len() > current_name.len()
+            && (new_name.contains("GmbH")
+                || new_name.contains("Inc")
+                || new_name.contains("Ltd")
+                || new_name.contains("Corp")
+                || new_name.contains("LLC")
+                || new_name.contains("Technologies"));
+
+        current_is_cryptic || new_is_descriptive
+    }
+
     /// Determine RIR based on IP address ranges
     fn determine_registry_from_ip(&self) -> String {
-        let octets = self.ip.octets();
-        let first_octet = octets[0];
+        match self.ip {
+            IpAddr::V4(ipv4) => {
+                let octets = ipv4.octets();
+                let first_octet = octets[0];
 
-        // Simplified RIR allocation ranges (non-overlapping)
-        match first_octet {
-            1 => "APNIC".to_string(),
-            2 => "RIPE".to_string(),
-            3..=6 => "ARIN".to_string(),
-            7..=13 => "ARIN".to_string(),
-            14 => "APNIC".to_string(),
-            15 => "ARIN".to_string(),
-            16..=61 => "ARIN".to_string(),
-            62..=63 => "RIPE".to_string(),
-            64..=76 => "ARIN".to_string(),
-            77..=95 => "RIPE".to_string(),
-            96..=100 => "ARIN".to_string(),
-            101..=103 => "APNIC".to_string(),
-            104..=105 => "ARIN".to_string(),
-            106..=126 => "APNIC".to_string(),
-            127 => "ARIN".to_string(), // Loopback
-            128..=162 => "ARIN".to_string(),
-            163 => "APNIC".to_string(),
-            164..=170 => "ARIN".to_string(),
-            171 => "APNIC".to_string(),
-            172..=174 => "ARIN".to_string(),
-            175 => "APNIC".to_string(),
-            176..=179 => "ARIN".to_string(),
-            180 => "APNIC".to_string(),
-            181 => "LACNIC".to_string(),
-            182..=183 => "APNIC".to_string(),
-            184..=191 => "ARIN".to_string(),
-            192..=201 => "ARIN".to_string(),
-            202..=203 => "APNIC".to_string(),
-            204..=209 => "ARIN".to_string(),
-            210..=211 => "APNIC".to_string(),
-            212..=213 => "RIPE".to_string(),
-            214..=216 => "ARIN".to_string(),
-            217 => "RIPE".to_string(),
-            218..=223 => "APNIC".to_string(),
-            _ => "UNKNOWN".to_string(),
+                // Simplified RIR allocation ranges (non-overlapping)
+                match first_octet {
+                    1 => "APNIC".to_string(),
+                    2 => "RIPE".to_string(),
+                    3..=6 => "ARIN".to_string(),
+                    7..=13 => "ARIN".to_string(),
+                    14 => "APNIC".to_string(),
+                    15 => "ARIN".to_string(),
+                    16..=61 => "ARIN".to_string(),
+                    62..=63 => "RIPE".to_string(),
+                    64..=76 => "ARIN".to_string(),
+                    77..=95 => "RIPE".to_string(),
+                    96..=100 => "ARIN".to_string(),
+                    101..=103 => "APNIC".to_string(),
+                    104..=105 => "ARIN".to_string(),
+                    106..=126 => "APNIC".to_string(),
+                    127 => "ARIN".to_string(), // Loopback
+                    128..=162 => "ARIN".to_string(),
+                    163 => "APNIC".to_string(),
+                    164..=170 => "ARIN".to_string(),
+                    171 => "APNIC".to_string(),
+                    172..=174 => "ARIN".to_string(),
+                    175 => "APNIC".to_string(),
+                    176..=179 => "ARIN".to_string(),
+                    180 => "APNIC".to_string(),
+                    181 => "LACNIC".to_string(),
+                    182..=183 => "APNIC".to_string(),
+                    184..=191 => "ARIN".to_string(),
+                    192..=201 => "ARIN".to_string(),
+                    202..=203 => "APNIC".to_string(),
+                    204..=223 => "ARIN".to_string(),
+                    _ => "UNKNOWN".to_string(),
+                }
+            }
+            IpAddr::V6(ipv6) => {
+                let segments = ipv6.segments();
+                let first_segment = segments[0];
+
+                // IPv6 RIR allocation ranges
+                match first_segment {
+                    // RIPE NCC: 2001::/16, 2a00::/12
+                    0x2001 => "RIPE".to_string(),
+                    0x2a00..=0x2aff => "RIPE".to_string(),
+                    // APNIC: 2400::/12
+                    0x2400..=0x24ff => "APNIC".to_string(),
+                    // ARIN: 2600::/12, 2610::/12, 2620::/12
+                    0x2600..=0x26ff => "ARIN".to_string(),
+                    // LACNIC: 2800::/12
+                    0x2800..=0x28ff => "LACNIC".to_string(),
+                    // AfriNIC: 2c00::/12
+                    0x2c00..=0x2cff => "AFRINIC".to_string(),
+                    _ => "UNKNOWN".to_string(),
+                }
+            }
         }
     }
 
@@ -693,9 +884,9 @@ impl EscalationPath {
     fn get_type_priority(&self, contact_type: &EscalationContactType) -> u8 {
         match contact_type {
             EscalationContactType::DirectAbuse => 1,
-            EscalationContactType::CloudProvider => 2,
-            EscalationContactType::AsnOwner => 3,
-            EscalationContactType::HostingProvider => 4,
+            EscalationContactType::HostingProvider => 2,
+            EscalationContactType::CloudProvider => 3,
+            EscalationContactType::AsnOwner => 4,
             EscalationContactType::ParentOrganization => 5,
             EscalationContactType::DomainRegistrar => 6,
             EscalationContactType::RegionalRegistry => 7,
@@ -707,7 +898,7 @@ impl EscalationPath {
 impl DualEscalationPath {
     /// Create dual escalation paths from EML file analysis
     pub async fn from_eml_analysis(
-        sending_ip: Ipv4Addr,
+        sending_ip: IpAddr,
         sending_hostname: Option<String>,
         sender_domain: Option<String>,
     ) -> Result<Self> {
@@ -791,7 +982,7 @@ impl DualEscalationPath {
             Ok(ipv4) => {
                 // Found hosting IP - create full escalation path with hosting and domain info
                 EscalationPath::new(
-                    ipv4,
+                    std::net::IpAddr::V4(ipv4),
                     Some(lookup_domain),
                     None, // No hostname for hosting lookup
                 )
@@ -807,7 +998,7 @@ impl DualEscalationPath {
     /// Create escalation path based only on domain registration info (when no hosting IP available)
     async fn create_domain_only_escalation_path(domain: &str) -> Result<EscalationPath> {
         let mut path = EscalationPath {
-            ip: std::net::Ipv4Addr::new(0, 0, 0, 0), // Placeholder IP for domain-only paths
+            ip: std::net::IpAddr::V4(std::net::Ipv4Addr::new(0, 0, 0, 0)), // Placeholder IP for domain-only paths
             domain: Some(domain.to_string()),
             contacts: Vec::new(),
             asn_info: None,

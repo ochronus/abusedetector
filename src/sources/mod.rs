@@ -63,7 +63,7 @@
 //! ```
 //!
 use async_trait::async_trait;
-use std::net::{IpAddr, Ipv4Addr};
+use std::net::IpAddr;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
@@ -292,7 +292,7 @@ pub fn map_provenance_to_contact_sources(
 
 /// Shared mutable state passed across sources.
 pub struct QueryContext {
-    pub ip: Option<Ipv4Addr>,
+    pub ip: Option<IpAddr>,
     pub reverse_hostname: Option<String>,
     pub sender_domain: Option<String>,
     pub eml_file: Option<PathBuf>,
@@ -320,7 +320,7 @@ pub struct QueryContext {
 /// holding a mutable borrow over the full QueryContext.
 #[derive(Clone, Debug)]
 pub struct QueryContextSnapshot {
-    pub ip: Option<Ipv4Addr>,
+    pub ip: Option<IpAddr>,
     pub reverse_hostname: Option<String>,
     pub effective_domain: Option<String>,
     pub opts: SourceOptions,
@@ -328,7 +328,7 @@ pub struct QueryContextSnapshot {
 
 impl QueryContext {
     pub async fn new(
-        ip: Option<Ipv4Addr>,
+        ip: Option<IpAddr>,
         sender_domain: Option<String>,
         eml_file: Option<PathBuf>,
         opts: SourceOptions,
@@ -450,13 +450,13 @@ impl ContactSource for ReverseDnsSource {
         if !ctx.opts.enable_reverse_dns {
             return Ok(vec![]);
         }
-        let Some(ipv4) = ctx.ip else {
+        let Some(ip) = ctx.ip else {
             return Ok(vec![]);
         };
         if ctx.reverse_hostname.is_some() {
             return Ok(vec![]); // Already resolved
         }
-        match reverse_dns(IpAddr::V4(ipv4), ctx.opts.show_commands).await {
+        match reverse_dns(ip, ctx.opts.show_commands).await {
             Ok(host_opt) => {
                 ctx.reverse_hostname = host_opt;
             }
@@ -554,7 +554,7 @@ impl ContactSource for WhoisIpSource {
         }
         // Implement WHOIS IP chain integration.
         // Reuse existing whois_ip_chain -> collect emails -> map to RawContact.
-        let Some(ipv4) = ctx.ip else {
+        let Some(ip) = ctx.ip else {
             return Ok(vec![]);
         };
 
@@ -573,7 +573,7 @@ impl ContactSource for WhoisIpSource {
         }
 
         let mut tmp = EmailSet::new();
-        if let Err(e) = crate::whois::whois_ip_chain(ipv4, &mut tmp, &SilentEnv).await {
+        if let Err(e) = crate::whois::whois_ip_chain(ip, &mut tmp, &SilentEnv).await {
             ctx.warnings.push(format!("WHOIS chain failed: {e}"));
             return Ok(vec![]);
         }

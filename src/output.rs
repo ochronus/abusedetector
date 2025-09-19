@@ -7,13 +7,13 @@
 #![allow(dead_code)]
 
 use std::io;
-use std::net::Ipv4Addr;
+use std::net::IpAddr;
 
 /// Represents the final results of an abuse detection query
 #[derive(Debug, Clone)]
 pub struct AbuseResults {
     /// The IP address that was queried
-    pub ip: Ipv4Addr,
+    pub ip: IpAddr,
 
     /// List of discovered abuse contacts with confidence scores
     pub contacts: Vec<AbuseContact>,

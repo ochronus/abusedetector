@@ -1,0 +1,261 @@
+Return-Path: <bounce+4d3403.1f5bcd-mailgun=example.com@example.io>
+Received: from phl-compute-03.internal (phl-compute-03.internal [10.202.2.43])
+	 by slotpi04m34 (Cyrus 3.13.0-alpha0-1223-gceee3026b-fm-20250908.001-gceee3026) with LMTPA;
+	 Wed, 17 Sep 2025 07:28:28 -0400
+X-Cyrus-Session-Id: slotpi04m34-1758108508-150383-2-5719987357029905053
+X-Sieve: CMU Sieve 3.0
+X-Spam-known-sender: no
+X-Spam-sender-reputation: 0 (domain)
+X-Spam-score: 5.9
+X-Spam-hits: BAYES_50 0.8, DCC_CHECK 1.1, HEADER_FROM_DIFFERENT_DOMAINS 0.001,
+  HTML_FONT_LOW_CONTRAST 0.001, HTML_MESSAGE 0.001, ME_SC_NH -0.001,
+  ME_SENDERREP_DENY 4, RCVD_IN_DNSWL_NONE -0.0001, RCVD_IN_MSPIKE_H2 0.001,
+  SPF_HELO_NONE 0.001, T_SPF_PERMERROR 0.01, LANGUAGES en, BAYES_USED user,
+  SA_VERSION 4.0.1
+X-Spam-source: IP='69.72.43.14', Host='m43-14.mailgun.net', Country='US', FromHeader='uk',
+  MailFrom='io'
+X-Spam-charsets: from='UTF-8', subject='UTF-8', plain='UTF-8', html='UTF-8'
+X-Resolved-to: test@example.com
+X-Delivered-to: test@example.com
+X-Mail-from: bounce+4d3403.1f5bcd-mailgun=example.com@example.io
+Received: from phl-mx-01 ([10.202.2.200])
+  by phl-compute-03.internal (LMTPProxy); Wed, 17 Sep 2025 07:28:28 -0400
+Received: from phl-mx-01.messagingengine.com (localhost [127.0.0.1])
+	by mailmx.phl.internal (Postfix) with ESMTP id 0F91F1120374
+	for <test@example.com>; Wed, 17 Sep 2025 07:28:27 -0400 (EDT)
+Received: from mailmx.phl.internal (localhost [127.0.0.1])
+    by phl-mx-01.messagingengine.com (Authentication Milter) with ESMTP
+    id ECC4A3849B2.8F52711202E5;
+    Wed, 17 Sep 2025 07:28:27 -0400
+ARC-Seal: i=2; a=rsa-sha256; cv=pass; d=messagingengine.com; s=fm1; t=
+    1758108507; b=Yljzt7VuVsUhIziaL/9dDYMF57peGP6r6KAyjinfbGF/cAM7eD
+    2Zm7YISRs1BTdi8M5mvsV0MrW+k7N2Z71PdqsKiggU7lhy0GVMqzpzoQRXbyw5Sq
+    Fk6DBOoeFa+BZp1tChiGCEurwjq3w4KslyyZj9e9J6wOp5kn85I0MTzEJAyG5YNU
+    Lk46/arVBc294IgaZk7y8lRBy8MjpiWCInLXxrAyvPxAasL9Su1UX4a11+DSbTSC
+    YL5dSwCDMnjZKOz5hRFxVMa2KZ+HasbKW8Xmo4uAjlX7F73pItTER6xGIg2Gwx5+
+    uqNBxK68FhIHkGqDvWwQuA/yTPhbJQ0rfKfg==
+ARC-Message-Signature: i=2; a=rsa-sha256; c=relaxed/relaxed; d=
+    messagingengine.com; h=date:to:from:reply-to:subject:message-id
+    :list-unsubscribe:mime-version:content-type
+    :content-transfer-encoding; s=fm1; t=1758108507; bh=FyZmgEZoKPDS
+    BHJiBmRsDwQJckeA5o6N2KSLg+aTOmY=; b=Ol5fh1duKGLfS4EIVapoIq4wG+wT
+    qitOaWS6hrL3eJflPOjkZWsWth9l3Ch/CsajJIBen/yQyoXKUl0lFAb1XwwLbKL6
+    EOsZvehF/0GsAL8SVIOJzlJ5G3SyA6+b0DlvFRdUPkO+UYZKRHp3nI8GmDsiHM2a
+    KBBOH5ej6/5OfkqkfGm3KuoKJ7LgQCbd9qevr33Tqqi4PhID8+w6HnJOtoHDgUsO
+    qNK16tAaANjMxuAIurAyx9aLCxTKi6qHLg1jDv0MSZTsVQuEfE1WDTiTJR72vCBx
+    UqOzdEJrstc+mO7Zmy2Jq85CBp2xhrfexwE/ob/pBui5HnYTA3fI16LF3Q==
+ARC-Authentication-Results: i=2; phl-mx-01.messagingengine.com;
+    x-csa=none;
+    x-me-sender=none;
+    x-ptr=pass smtp.helo=m43-14.mailgun.net policy.ptr=m43-14.mailgun.net;
+    bimi=none (No BIMI records found);
+    arc=pass (as.1.mailgun.org=pass, ams.1.mailgun.org=pass)
+    smtp.remote-ip=69.72.43.14;
+    dkim=pass (1024-bit rsa key sha256) header.d=amazonses.com
+    header.i=@amazonses.com header.b=eWTgHrlF header.a=rsa-sha256
+    header.s=ihchhvubuqgjsxyuhssfvqohv7z3u4hn;
+    dkim=pass (1024-bit rsa key sha256) header.d=example.io
+    header.i=@example.io header.b=EyPNlvJw header.a=rsa-sha256
+    header.s=mx;
+    dkim=pass (1024-bit rsa key sha256) header.d=example.co.uk
+    header.i=@example.co.uk header.b=hT4wrtAw
+    header.a=rsa-sha256 header.s=cuzgdxieglxxj7xv4ylqzmwvswchiebo;
+    dmarc=pass policy.published-domain-policy=quarantine
+    policy.published-subdomain-policy=quarantine
+    policy.applied-disposition=none policy.evaluated-disposition=none
+    (p=quarantine,sp=quarantine,d=none,d.eval=none) policy.policy-from=p
+    header.from=example.co.uk;
+    iprev=pass smtp.remote-ip=69.72.43.14 (m43-14.mailgun.net);
+    spf=permerror
+    smtp.mailfrom=
+    "bounce+4d3403.1f5bcd-mailgun=example.com@example.io"
+    smtp.helo=m43-14.mailgun.net
+X-ME-Authentication-Results: phl-mx-01.messagingengine.com;
+    x-tls=pass smtp.version=TLSv1.2 smtp.cipher=ECDHE-RSA-AES256-GCM-SHA384
+      smtp.bits=256/256;
+    x-vs=commercial:mce score=17 state=11
+Authentication-Results: phl-mx-01.messagingengine.com;
+    x-csa=none;
+    x-me-sender=none;
+    x-ptr=pass smtp.helo=m43-14.mailgun.net policy.ptr=m43-14.mailgun.net
+Authentication-Results: phl-mx-01.messagingengine.com;
+    bimi=none (No BIMI records found)
+Authentication-Results: phl-mx-01.messagingengine.com;
+    arc=pass (as.1.mailgun.org=pass, ams.1.mailgun.org=pass)
+      smtp.remote-ip=69.72.43.14
+Authentication-Results: phl-mx-01.messagingengine.com;
+    dkim=pass (1024-bit rsa key sha256) header.d=amazonses.com
+      header.i=@amazonses.com header.b=eWTgHrlF header.a=rsa-sha256
+      header.s=ihchhvubuqgjsxyuhssfvqohv7z3u4hn;
+    dkim=pass (1024-bit rsa key sha256) header.d=example.io
+      header.i=@example.io header.b=EyPNlvJw header.a=rsa-sha256
+      header.s=mx;
+    dkim=pass (1024-bit rsa key sha256) header.d=example.co.uk
+      header.i=@example.co.uk header.b=hT4wrtAw
+      header.a=rsa-sha256 header.s=cuzgdxieglxxj7xv4ylqzmwvswchiebo;
+    dmarc=pass policy.published-domain-policy=quarantine
+      policy.published-subdomain-policy=quarantine
+      policy.applied-disposition=none policy.evaluated-disposition=none
+      (p=quarantine,sp=quarantine,d=none,d.eval=none) policy.policy-from=p
+      header.from=example.co.uk;
+    iprev=pass smtp.remote-ip=69.72.43.14 (m43-14.mailgun.net);
+    spf=permerror
+      smtp.mailfrom=
+      "bounce+4d3403.1f5bcd-mailgun=example.com@example.io"
+      smtp.helo=m43-14.mailgun.net
+X-ME-VSCause: gggruggvucftvghtrhhoucdtuddrgeeffedrtdeggdegfeeffecutefuodetggdotefrod
+    ftvfcurfhrohhfihhlvgemucfhrghsthforghilhdpuffrtefokffrpgfnqfghnecuuegr
+    ihhlohhuthemuceftddtnecundfotefknffkpffiucdludejmdenucfjughrpeffvffhrh
+    fukffojfggtgfgsegrkeerphertdejnecuhfhrohhmpefurghrrghhucdqucgflhhtihhm
+    rghtvgcuqfhuthhsohhurhgtihhnghcuoegsphhosehulhhtihhmrghtvghouhhtshhouh
+    hrtghinhhgrdgtohdruhhkqeenucggtffrrghtthgvrhhnpeekkeetffegudduhfelfedt
+    veeiudeijefggeffjeeijeefffejfffhuedvfedukeenucffohhmrghinhepuhhlthhimh
+    grthgvohhuthhsohhurhgtihhnghdrtghordhukhenucfkphepieelrdejvddrgeefrddu
+    gedpheegrddvgedtrdefrdeknecuvehluhhsthgvrhfuihiivgeptdenucfrrghrrghmpe
+    hinhgvthepieelrdejvddrgeefrddugedphhgvlhhopehmgeefqddugedrmhgrihhlghhu
+    nhdrnhgvthdpmhgrihhlfhhrohhmpeeosghouhhntggvodegugefgedtfedrudhfhegstg
+    guqdhmrghilhhguhhnpehotghhrhhonhhushdrtghomhesthgvrghmhhgvrghlthhhrdhi
+    oheqpdhnsggprhgtphhtthhopedupdhrtghpthhtohepoehmrghilhhguhhnsehotghhrh
+    honhhushdrtghomheq
+X-ME-VSScore: 17
+X-ME-VSCategory: commercial:mce
+X-ME-CSA: none
+X-ME-Received: <xmx:WpvKaNcbcR61BzrakrogOWhfNN07qYbEdG3CDuxOIzZM2FneZkVIig>
+X-ME-Received: <xmx:WpvKaM7xPInqVzxDY_YFzrez1IBbCv2ymsLpqo20pdIdDcgUa9J1TA>
+Received-SPF: permerror
+    (example.io: Redundant applicable 'v=spf1' sender policies found)
+    receiver=phl-mx-01.messagingengine.com;
+    identity=mailfrom;
+    envelope-from="bounce+4d3403.1f5bcd-mailgun=example.com@example.io";
+    helo=m43-14.mailgun.net;
+    client-ip=69.72.43.14
+Received: from m43-14.mailgun.net (m43-14.mailgun.net [69.72.43.14])
+	(using TLSv1.2 with cipher ECDHE-RSA-AES256-GCM-SHA384 (256/256 bits))
+	(No client certificate requested)
+	by phl-mx-01.messagingengine.com (Postfix) with ESMTPS id 8F52711202E5
+	for <test@example.com>; Wed, 17 Sep 2025 07:28:26 -0400 (EDT)
+ARC-Seal: i=1; cv=none; a=rsa-sha256; d=mailgun.org; s=mg; t=1758108504;
+ b=S9l6pcglIw4LjiIENgnoeW7JMA8+Sk0kiffu1UwWJ4qzTLzvOYmrf2xAQmWOdflE3s9mJHcFqgxoh/kOsCWIjCyeEX075/uUGW8dbbESB7F8z6kd5pyzg30V/bGySYz61YKPycPeev6MYlSCsv4x3NW1S3pUaj/UDQVR/Cqhi2w=
+ARC-Message-Signature: i=1; a=rsa-sha256; c=relaxed/relaxed; d=mailgun.org; s=mg; t=1758108504;
+ h=Content-Transfer-Encoding: Content-Type: MIME-Version: List-Unsubscribe: Message-ID: Subject: Subject: Reply-To: From: From: To: To: Date: Sender: DKIM-Signature: DKIM-Signature: DKIM-Signature;
+ bh=FyZmgEZoKPDSBHJiBmRsDwQJckeA5o6N2KSLg+aTOmY=;
+ b=HtjmEcCcDMGlcNlA7uDInAuprzumuxvZTC16ZKbEQjxosmi2lHLtjBDQZprJ1+JK+M1fwtoRVT6/n2Vv9OF/1usT7QTLIL2xpYm3bPaJrjN8Y8a9aOmtuE6NlxQcApBTb6M97hy5ka6rSrJx4f6moXaIWpyC/ISnIEUU0OdvfI8=
+ARC-Authentication-Results: i=1; mailgun.org;
+ dkim=pass header.d=amazonses.com header.s=ihchhvubuqgjsxyuhssfvqohv7z3u4hn header.b=eWTgHrlF;
+ dkim=pass header.d=example.co.uk header.s=cuzgdxieglxxj7xv4ylqzmwvswchiebo header.b=hT4wrtAw;
+ spf=pass (domain aws.example.co.uk designates 54.240.3.8 as permitted sender) smtp.mailfrom="01020199576ec65a-68679859-9278-4d10-9027-abcb77143a77-000000@aws.example.co.uk";
+ dmarc=pass (dkim=pass domain=example.co.uk) header.from=example.co.uk;
+ arc=none
+DKIM-Signature: a=rsa-sha256; v=1; c=relaxed/relaxed; d=example.io; q=dns/txt; s=mx; t=1758108504; x=1758115704;
+ h=Content-Transfer-Encoding: Content-Type: MIME-Version: List-Unsubscribe: Message-ID: Subject: Subject: Reply-To: From: From: To: To: Date: Sender;
+ bh=FyZmgEZoKPDSBHJiBmRsDwQJckeA5o6N2KSLg+aTOmY=;
+ b=EyPNlvJwWSerqGa+1DMmZCU/H6fhF5j0w+sbSTVQWU1uol15GquUe4V/LVprXIrTcQQdiFbXcYxKfrWJys2sgSb7P56AgcKybLrQQQR4/jBGBDnMIRCOJG9NL21rVHJaPsKGqjp4RSErU2cBjmwm/bbcaR2IwbpYXJaBGFmT8Y4=
+Received: from a3-8.smtp-out.eu-west-1.amazonses.com
+ (a3-8.smtp-out.eu-west-1.amazonses.com [54.240.3.8]) by
+ f8dbba4af540fe3a3958deaf514b3add20d8661611760c3a0544291d464aebbd with SMTP id
+ 68ca9b57375c8fd088a8904a (version=TLS1.3, cipher=TLS_AES_128_GCM_SHA256);
+ Wed, 17 Sep 2025 11:28:23 GMT
+X-Mailgun-Sending-Ip: 69.72.43.14
+X-Mailgun-Incoming: Yes
+X-Envelope-From: 01020199576ec65a-68679859-9278-4d10-9027-abcb77143a77-000000@aws.example.co.uk
+Received: from a3-8.smtp-out.eu-west-1.amazonses.com
+ (a3-8.smtp-out.eu-west-1.amazonses.com [54.240.3.8]) by
+ f8dbba4af540fe3a3958deaf514b3add20d8661611760c3a0544291d464aebbd with SMTP id
+ <undefined> (version=TLS1.3, cipher=TLS_AES_128_GCM_SHA256); Wed, 17 Sep 2025
+ 11:28:23 GMT
+DKIM-Signature: v=1; a=rsa-sha256; q=dns/txt; c=relaxed/simple;
+	s=cuzgdxieglxxj7xv4ylqzmwvswchiebo; d=example.co.uk;
+	t=1758108501;
+	h=Date:To:From:Reply-To:Subject:Message-ID:List-Unsubscribe:MIME-Version:Content-Type:Content-Transfer-Encoding;
+	bh=X+Y0dpVIMUE5yYNb7TUAlvgDJ2Qp/y6Lp26dYmAHD2Q=;
+	b=hT4wrtAw7HDCD3eMgeYietVSywpHugd6a4yQSo1/dnhyqqebzbJ/y3vinVmkErox
+	xQibo8IA2W+Rjf2tN8R50l++8j5wDrVoO0OXx9cLtihS/QqYfaeTWeh2fZ6bsIIelK+
+	jEA2SoyiUYH4m6PRqaO8q/ko5t5PZqXeRVXap368=
+DKIM-Signature: v=1; a=rsa-sha256; q=dns/txt; c=relaxed/simple;
+	s=ihchhvubuqgjsxyuhssfvqohv7z3u4hn; d=amazonses.com; t=1758108501;
+	h=Date:To:From:Reply-To:Subject:Message-ID:List-Unsubscribe:MIME-Version:Content-Type:Content-Transfer-Encoding:Feedback-ID;
+	bh=X+Y0dpVIMUE5yYNb7TUAlvgDJ2Qp/y6Lp26dYmAHD2Q=;
+	b=eWTgHrlFFkvU2VYc5hRTmCNd7rpbV6qD7zQzsn2XgMBUnXueEvv8Dg3RRHpx53lV
+	HyiKm+C3yzfwzI/abAIsX5JjVVSrx6GgpzDEQKdDvpPqT/mZZd/cnGd2aF8Mb/9lAXN
+	OWf+2GLbUeUkBc5lDqD6Y/GHbRozWgPkxBzuRu2g=
+Date: Wed, 17 Sep 2025 11:28:21 +0000
+To: Test Recipient <test@example.com>
+From: Sample Sender <sender@example.co.uk>
+Reply-To: Sample Sender <sender@example.co.uk>
+Subject: Sample Email Subject - Testing Purpose Only
+Message-ID: <01020199576ec65a-68679859-9278-4d10-9027-abcb77143a77-000000@eu-west-1.amazonses.com>
+X-Mailer: Sendy (https://sendy.co)
+List-Unsubscribe: <https://example.co.uk/unsubscribe/placeholder>
+MIME-Version: 1.0
+Content-Type: multipart/alternative;
+	boundary="b1_3a2eb3238eab24eaea0cbb0cf54c8e31"
+Content-Transfer-Encoding: 8bit
+Feedback-ID: ::1.eu-west-1.KIPy8YoICgtspxbSWt8+w7U69dlN7JQGz2MjH/JNrEI=:AmazonSES
+X-SES-Outgoing: 2025.09.17-54.240.3.8
+
+This is a multi-part message in MIME format.
+
+--b1_3a2eb3238eab24eaea0cbb0cf54c8e31
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+This is a sample email for testing purposes.
+
+The original content has been replaced with placeholder text to protect privacy.
+
+This email is used for testing the abusedetector tool's ability to extract originating IP addresses from email headers and find appropriate abuse contact information.
+
+Key testing points:
+- IP extraction from X-Mailgun-Sending-Ip header
+- IP extraction from Received headers
+- Sender domain detection for fallback scenarios
+
+The originating IP should be detected as 69.72.43.14 from the Mailgun infrastructure.
+
+--b1_3a2eb3238eab24eaea0cbb0cf54c8e31
+Content-Type: text/html; charset=UTF-8
+Content-Transfer-Encoding: quoted-printable
+
+<!DOCTYPE html>
+<html lang=3D"en">
+<head><meta charset=3D"UTF-8">
+=09<title>Sample Email - Testing Purpose</title>
+=09<meta name=3D"viewport" content=3D"width=3Ddevice-width, initial-scale=
+=3D1"><meta name=3D"x-apple-disable-message-reformatting">
+=09<style type=3D"text/css">
+    body { margin:0; padding:0; background:#f5f5f5; font-family:Arial,Helve=
+tica,sans-serif }
+    .container { width:600px; max-width:600px; margin:0 auto; background:#f=
+ff; border:1px solid #ddd }
+    .content { padding:20px 30px; font-size:15px; line-height:1.5; color:#3=
+33 }
+=09</style>
+</head>
+<body>
+<table cellpadding=3D"0" cellspacing=3D"0" class=3D"container" role=3D"pres=
+entation" width=3D"600">
+=09<tbody>
+=09=09<tr>
+=09=09=09<td class=3D"content">
+=09=09=09<h1>Sample Email for Testing</h1>
+=09=09=09<p>This is a sample email for testing purposes.</p>
+=09=09=09<p>The original content has been replaced with placeholder text to=
+ protect privacy.</p>
+=09=09=09<p>This email is used for testing the abusedetector tool's ability=
+ to extract originating IP addresses from email headers.</p>
+=09=09=09<p><strong>Key testing points:</strong></p>
+=09=09=09<ul>
+=09=09=09=09<li>IP extraction from X-Mailgun-Sending-Ip header</li>
+=09=09=09=09<li>IP extraction from Received headers</li>
+=09=09=09=09<li>Sender domain detection for fallback scenarios</li>
+=09=09=09</ul>
+=09=09=09<p>The originating IP should be detected as 69.72.43.14 from the =
+Mailgun infrastructure.</p>
+=09=09=09</td>
+=09=09</tr>
+=09</tbody>
+</table>
+</body>
+</html>
+
+--b1_3a2eb3238eab24eaea0cbb0cf54c8e31--

@@ -1,4 +1,4 @@
-use std::net::{IpAddr, Ipv4Addr};
+use std::net::IpAddr;
 use std::path::Path;
 use std::time::Instant;
 
@@ -22,8 +22,8 @@ use crate::sources::{
     SourceOptions, WhoisIpSource,
 };
 
-/// Placeholder IP used during domain-only fallback (no usable IPv4 extracted).
-const FALLBACK_IP: Ipv4Addr = Ipv4Addr::new(0, 0, 0, 0);
+/// Placeholder IP used during domain-only fallback (no usable IP extracted).
+const FALLBACK_IP: IpAddr = IpAddr::V4(std::net::Ipv4Addr::new(0, 0, 0, 0));
 
 /// High-level façade providing library-consumable entry points.
 ///
@@ -39,14 +39,14 @@ const FALLBACK_IP: Ipv4Addr = Ipv4Addr::new(0, 0, 0, 0);
 pub struct AbuseDetector;
 
 impl AbuseDetector {
-    /// Analyze a direct IPv4 input.
-    pub async fn analyze_ip(ip: Ipv4Addr, opts: AnalysisOptions) -> Result<AbuseAnalysis> {
-        if is_private(IpAddr::V4(ip)) {
+    /// Analyze a direct IP input (IPv4 or IPv6).
+    pub async fn analyze_ip(ip: IpAddr, opts: AnalysisOptions) -> Result<AbuseAnalysis> {
+        if is_private(ip) {
             return Err(AbuseDetectorError::Configuration {
-                message: format!("{ip} is a private (RFC1918) address"),
+                message: format!("{ip} is a private address"),
             });
         }
-        if is_reserved(IpAddr::V4(ip)) {
+        if is_reserved(ip) {
             return Err(AbuseDetectorError::Configuration {
                 message: format!("{ip} is a reserved address"),
             });
@@ -170,12 +170,12 @@ impl AbuseDetector {
         let ip_result = eml::parse_eml_origin_ip_from_path(path);
         match ip_result {
             Ok(IpExtractionResult {
-                ip: IpAddr::V4(v4),
+                ip,
                 source: _,
                 confidence: _,
-            }) if !is_private(IpAddr::V4(v4)) && !is_reserved(IpAddr::V4(v4)) => {
+            }) if !is_private(ip) && !is_reserved(ip) => {
                 // Delegate to IP path but embed EML context
-                let mut analysis = Self::analyze_ip(v4, opts.clone()).await?;
+                let mut analysis = Self::analyze_ip(ip, opts.clone()).await?;
                 analysis.sender_domain = sender_domain;
                 analysis
                     .warnings
@@ -201,7 +201,7 @@ impl AbuseDetector {
     }
 }
 
-/// Domain fallback flow used when no valid public IPv4 could be extracted
+/// Domain fallback flow used when no valid public IP could be extracted
 /// from an EML file.
 async fn domain_fallback(
     sender_domain: Option<String>,

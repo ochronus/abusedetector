@@ -207,7 +207,7 @@ This is a test message body.
 
     let stderr = str::from_utf8(&output.stderr).unwrap();
     assert!(
-        stderr.contains("No public IPv4"),
+        stderr.contains("No public IP"),
         "Should report no public IPs found"
     );
 }
@@ -396,6 +396,36 @@ fn test_eml_file_not_found() {
     assert!(
         stderr.contains("Error extracting IP"),
         "Should report EML reading error; stderr was: {stderr}"
+    );
+}
+
+/// Test IPv6 address lookup
+#[test]
+fn test_ipv6_lookup() {
+    let binary = get_binary_path();
+    let output = Command::new(&binary)
+        .arg("2a01:111:f403:200a::620")
+        .arg("--verbose=1")
+        .output()
+        .expect("Failed to execute binary");
+
+    assert!(output.status.success());
+
+    let stdout = str::from_utf8(&output.stdout).unwrap();
+    let stderr = str::from_utf8(&output.stderr).unwrap();
+
+    // Should properly handle IPv6 address
+    assert!(
+        stdout.contains("2a01:111:f403:200a::620") || stderr.contains("2a01:111:f403:200a::620"),
+        "Should show the IPv6 address in output"
+    );
+
+    // Should find abuse contacts (Microsoft Outlook)
+    assert!(
+        stdout.contains("abuse@")
+            || stdout.contains("@outlook.com")
+            || stdout.contains("@microsoft.com"),
+        "Should find abuse contacts for Microsoft's IPv6 range"
     );
 }
 

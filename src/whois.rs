@@ -1,4 +1,4 @@
-use std::net::Ipv4Addr;
+use std::net::IpAddr;
 use std::time::Duration;
 
 use anyhow::{Result, anyhow};
@@ -48,6 +48,37 @@ const WHOIS_PORT: u16 = 43;
 
 /// Maximum referral (chained WHOIS) depth to avoid loops.
 const MAX_WHOIS_DEPTH: usize = 6;
+
+/// Determine the initial WHOIS server based on IP address type and range.
+///
+/// For IPv4: Uses ARIN as the starting point (most common for global allocation)
+/// For IPv6: Uses appropriate RIR based on address prefix
+fn get_initial_whois_server(ip: IpAddr) -> String {
+    match ip {
+        IpAddr::V4(_) => "whois.arin.net".to_string(),
+        IpAddr::V6(ipv6) => {
+            // Determine IPv6 RIR based on prefix
+            let segments = ipv6.segments();
+            let first_segment = segments[0];
+
+            match first_segment {
+                // RIPE NCC: 2001::/16, 2a00::/12
+                0x2001 => "whois.ripe.net".to_string(),
+                0x2a00..=0x2aff => "whois.ripe.net".to_string(),
+                // APNIC: 2400::/12
+                0x2400..=0x24ff => "whois.apnic.net".to_string(),
+                // ARIN: 2600::/12, 2610::/12, 2620::/12
+                0x2600..=0x26ff => "whois.arin.net".to_string(),
+                // LACNIC: 2800::/12
+                0x2800..=0x28ff => "whois.lacnic.net".to_string(),
+                // AfriNIC: 2c00::/12
+                0x2c00..=0x2cff => "whois.afrinic.net".to_string(),
+                // Default to ARIN for other ranges
+                _ => "whois.arin.net".to_string(),
+            }
+        }
+    }
+}
 
 /// Perform a basic WHOIS query (over TCP 43) with a timeout.
 ///
@@ -122,7 +153,7 @@ pub async fn query_abuse_net<E: WhoisEnv + ?Sized>(
     Ok(())
 }
 
-/// Query an IPv4 address starting at ARIN (whois.arin.net) and follow referrals
+/// Query an IP address (IPv4/IPv6) starting at the appropriate RIR and follow referrals
 /// (via `refer:` or `ReferralServer:` lines) up to MAX_WHOIS_DEPTH.
 ///
 /// Extracts plausible email addresses along the way, adding +1 confidence per occurrence.
@@ -130,11 +161,11 @@ pub async fn query_abuse_net<E: WhoisEnv + ?Sized>(
 /// Lightweight WHOIS response parser focused on practical extraction of abuse-related
 /// emails and referral following across common RIR servers.
 pub async fn whois_ip_chain<E: WhoisEnv + ?Sized>(
-    ip: Ipv4Addr,
+    ip: IpAddr,
     emails: &mut EmailSet,
     env: &E,
 ) -> Result<()> {
-    let mut server = "whois.arin.net".to_string();
+    let mut server = get_initial_whois_server(ip);
     let ip_str = ip.to_string();
 
     let re_email = Regex::new(r"(?i)([A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,})").unwrap();
@@ -201,7 +232,7 @@ pub async fn whois_ip_chain<E: WhoisEnv + ?Sized>(
 #[cfg(test)]
 #[allow(dead_code)]
 pub async fn run_whois_phase(
-    ip: Ipv4Addr,
+    ip: IpAddr,
     hostname_domain: Option<&str>,
     emails: &mut EmailSet,
     opts: &Cli,
@@ -234,7 +265,7 @@ pub struct CymruAsnInfo {
 ///
 /// Returns detailed ASN information that's often missing from regular WHOIS.
 /// Format: "AS | IP | BGP Prefix | CC | Registry | Allocated | AS Name"
-pub async fn query_cymru_asn<E: WhoisEnv + ?Sized>(ip: Ipv4Addr, env: &E) -> Result<CymruAsnInfo> {
+pub async fn query_cymru_asn<E: WhoisEnv + ?Sized>(ip: IpAddr, env: &E) -> Result<CymruAsnInfo> {
     let query = format!(" -v {}", ip);
 
     if env.show_commands() {
