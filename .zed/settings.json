@@ -1,0 +1,26 @@
+{
+  "languages": {
+    "Rust": {
+      "language_servers": ["rust-analyzer"],
+      "format_on_save": "on",
+      "formatter": "language_server"
+    },
+    "TOML": {
+      "format_on_save": "on",
+      "formatter": {
+        "external": {
+          "command": "taplo",
+          "arguments": ["fmt", "-"]
+        }
+      }
+    }
+  },
+  "lsp": {
+    "taplo": {
+      "binary": {
+        "path": "taplo",
+        "arguments": ["lsp", "stdio"]
+      }
+    }
+  }
+}
